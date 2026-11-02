@@ -1,0 +1,21 @@
+[
+  {"name": "flush", "term": "flush", "app": "Claude", "window": "Workbook plan",
+   "context": "K3 · Caches and durability (about 9,800 words):\n- LRU internals and memoisation;\n- write vs flush vs fsync vs fsyncing the directory;\n- framing the records in a write-ahead log, torn writes, compaction and atomic replace, with crash tests;\n- how Redis, SQLite and Kafka handle the same problems;",
+   "followup": "why fsync the directory too?"},
+  {"name": "fsync", "term": "fsync", "app": "Claude", "window": "Workbook plan",
+   "context": "- LRU internals and memoisation;\n- write vs flush vs fsync vs fsyncing the directory;\n- framing the records in a write-ahead log, torn writes, compaction and atomic replace, with crash tests;"},
+  {"name": "LRU", "term": "LRU", "app": "Claude", "window": "Workbook plan",
+   "context": "K3 · Caches and durability (about 9,800 words):\n- LRU internals and memoisation;\n- write vs flush vs fsync vs fsyncing the directory;"},
+  {"name": "memoisation", "term": "memoisation", "app": "Claude", "window": "Workbook plan",
+   "context": "K3 · Caches and durability (about 9,800 words):\n- LRU internals and memoisation;\n- write vs flush vs fsync vs fsyncing the directory;"},
+  {"name": "head-hash", "term": "head-hash", "app": "Claude", "window": "Workbook plan",
+   "context": "K4 · Files and processes (about 8,600 words):\n- inodes, hard links vs symlinks, and the size → head-hash → full-hash funnel;\n- Pillow and which operations release the GIL;\n- process pool details, measured timings, and scaling the image pipeline to 1M images."},
+  {"name": "ahead-word", "term": "ahead", "app": "Claude", "window": "Workbook plan",
+   "context": "- framing the records in a write-ahead log, torn writes, compaction and atomic replace, with crash tests;"},
+  {"name": "flush-prose", "term": "flushed", "app": "Safari", "window": "The Remains of the Day",
+   "context": "When I mentioned the letter, Miss Kenton flushed and turned quickly to the window, as though something in the garden had caught her attention."},
+  {"name": "passage", "term": "the size → head-hash → full-hash funnel", "app": "Claude", "window": "Workbook plan",
+   "context": "- inodes, hard links vs symlinks, and the size → head-hash → full-hash funnel;\n- Pillow and which operations release the GIL;"},
+  {"name": "french", "term": "l'esprit de l'escalier", "app": "Chrome", "window": "Essay — The New Yorker",
+   "context": "It was a classic case of l'esprit de l'escalier: the perfect reply arrived only once he was halfway down the stairs."}
+]

@@ -1,0 +1,42 @@
+import AppKit
+import SwiftUI
+
+let args = CommandLine.arguments
+
+if args.contains("--trigger") {
+    DistributedNotificationCenter.default().postNotificationName(Notification.Name("com.jkmr.aside.trigger"), object: nil,
+                                                                 userInfo: nil, deliverImmediately: true)
+    exit(0)
+}
+
+// `TOGETHER_API_KEY=… Aside --import-key` saves the key for Aside.
+if args.contains("--import-key") {
+    guard let key = ProcessInfo.processInfo.environment["TOGETHER_API_KEY"]?.nonEmpty else {
+        print("Set TOGETHER_API_KEY to import it.")
+        exit(1)
+    }
+    KeyStore.save(key)
+    print("Saved.")
+    exit(0)
+}
+
+MainActor.assumeIsolated {
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+
+    if let i = args.firstIndex(of: "--probe") {
+        let delay = (i + 1 < args.count ? Double(args[i + 1]) : nil) ?? 3
+        DevTools.probe(after: delay)
+        app.run()
+    } else if let i = args.firstIndex(of: "--icon") {
+        DevTools.icon(to: i + 1 < args.count ? args[i + 1] : "icon.png")
+    } else if let i = args.firstIndex(of: "--shots") {
+        let dir = i + 1 < args.count ? args[i + 1] : "shots"
+        DevTools.shots(into: dir)
+        app.run()
+    } else {
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        withExtendedLifetime(delegate) { app.run() }
+    }
+}
