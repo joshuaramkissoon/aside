@@ -60,7 +60,7 @@ struct PanelRoot: View {
         let c = settings.palette.swatch(scheme)
         Group {
             switch ui.mode {
-            case .lookup(let s): LookupView(session: s, ui: ui)
+            case .lookup(let s): LookupView(session: s, ui: ui).id(s.id) // fresh scroll and layout state per look-up
             case .hint(let title, let body, let action): HintView(title: title, message: body, action: action, ui: ui)
             }
         }

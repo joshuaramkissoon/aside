@@ -34,13 +34,13 @@ git clone <this repo> && cd aside
 scripts/build.sh --install      # builds, signs and opens ~/Applications/Aside.app
 ```
 
-The first launch opens Settings. Grant **Accessibility**, which Aside needs to read what you point at. **Screen Recording** is optional and only used for apps that hide their text. Then paste a [Together](https://api.together.ai) API key. To reuse a key from an `.env` without pasting it:
+The first launch walks you through setup. Grant **Accessibility**, which Aside needs to read what you point at; the window moves on by itself once it sees the switch flipped. **Screen Recording** is optional and only used for apps that hide their text. Then paste a [Together](https://api.together.ai) API key, and optionally a Gemini key for looking up things the model hasn't heard of. The last step has some text to try ⌥ Space on. To reuse keys from an `.env` without pasting them:
 
 ```sh
 TOGETHER_API_KEY=... ~/Applications/Aside.app/Contents/MacOS/Aside --import-key
 ```
 
-Settings also has three palettes (Rubric, Marker, Plum & Coral), each following light and dark mode, a choice of two-key shortcuts, and launch at login.
+Settings (in the menu bar) has three palettes (Rubric, Marker, Plum & Coral), each following light and dark mode, a choice of two-key shortcuts, your keys and launch at login. **Pause Aside** in the menu hands ⌥ Space back to other apps until you resume.
 
 <img src="docs/marker-light.png" width="440" alt="The Marker palette"> <img src="docs/plum-dark.png" width="440" alt="The Plum & Coral palette in dark mode">
 
@@ -49,10 +49,13 @@ Settings also has three palettes (Rubric, Marker, Plum & Coral), each following 
 ```sh
 swift build && .build/debug/Aside            # run from a terminal that has Accessibility access
 python3 bench/run.py [case ...]              # latency and answers for bench/cases.json, using the app's exact prompt
-.build/debug/Aside --shots out/              # screenshots of the panel in every palette and appearance
+.build/debug/Aside --shots out/              # panel screenshots in every palette; SHOTS=all adds edge cases, SETTINGS=1 and ONBOARD=1 the windows
 PROBE_APP=com.google.Chrome .build/debug/Aside --probe 0   # print what capture reads from an app
 .build/debug/Aside --trigger                 # run a look-up in the running app, as if the shortcut was pressed
 scripts/icon.sh                              # rebuild the app icon
+scripts/release.sh                           # universal build, Developer ID signing, DMG, notarisation (needs ASIDE_NOTARY_PROFILE)
+.build/debug/Aside --selftest                # check capture on Aside's own window, and CJK word segmentation
+.build/debug/Aside --markdown                # print how the parser reads tricky markdown
 ```
 
 The prompt lives in `Sources/Aside/Prompt.swift`; `bench/run.py` reads it from there, so the bench and the app never drift apart.

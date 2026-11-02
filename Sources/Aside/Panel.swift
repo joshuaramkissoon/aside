@@ -17,6 +17,8 @@ final class LookupPanel: NSPanel {
         isMovableByWindowBackground = true
         animationBehavior = .none
         isReleasedWhenClosed = false
+        setAccessibilityLabel("Aside")
+        setAccessibilitySubrole(.floatingWindow)
     }
 
     override var canBecomeKey: Bool { true }
