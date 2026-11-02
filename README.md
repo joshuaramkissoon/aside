@@ -23,7 +23,8 @@ The answer is laid out for skimming: the term and what kind of thing it is here,
 
 - **Fast.** Answers come from DeepSeek V4.1 Flash on Together with thinking turned off. The first word arrives in about 0.3s and the whole answer in under a second. Aside keeps one connection warm and opens it as soon as you hold ⌥, before the shortcut lands. Asking about the same text twice is instant.
 - **In context.** Aside reads the selection (or the word under the pointer) through the Accessibility API, plus the paragraphs around it and the app and window it's in. That works in native text views and in web content through WebKit's and Chromium's text markers (tested in TextEdit, Chrome and the Claude app). Where an app hides its text, Aside copies the selection and puts your clipboard back, or reads the screen around the pointer with on-device text recognition. Capture takes 20–70ms.
-- **Private by default.** Only the text you look up and the words around it are sent to the model. Your key is stored in `~/Library/Application Support/Aside/together-api-key`, readable only by you.
+- **Looks things up when it doesn't know.** For a codename, product, person or anything newer than the model, it doesn't guess. It searches instead, then answers from what it found and shows the sources. Wikipedia needs no key. With a Gemini key, Google Search grounding covers the news too. Ordinary terms never search, and a searched answer takes about two seconds.
+- **Private by default.** Only the text you look up and the words around it are sent to the model. When a search is needed, only a short query (like "Anthropic Glasswing") goes to Wikipedia or Gemini. Keys are stored in `~/Library/Application Support/Aside/`, readable only by you.
 
 ## Install
 
