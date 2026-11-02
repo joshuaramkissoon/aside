@@ -1,2 +1,4 @@
 og/
 README.md
+.env*
+.vercel/
