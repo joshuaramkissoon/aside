@@ -98,7 +98,7 @@ struct LookupView: View {
     /// Room under the newest follow-up, so its question can sit at the top while the answer streams in below.
     private var runway: CGFloat {
         guard let asked = askedTurn, asked == session.turns.last?.id, contentHeight > ui.maxScrollHeight else { return 0 }
-        return max(0, ui.maxScrollHeight - lastTurnHeight - Self.padTop - Self.padBottom)
+        return max(0, ui.maxScrollHeight - lastTurnHeight - Self.padBottom)
     }
 
     var body: some View {
