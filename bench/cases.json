@@ -17,5 +17,13 @@
   {"name": "passage", "term": "the size → head-hash → full-hash funnel", "app": "Claude", "window": "Workbook plan",
    "context": "- inodes, hard links vs symlinks, and the size → head-hash → full-hash funnel;\n- Pillow and which operations release the GIL;"},
   {"name": "french", "term": "l'esprit de l'escalier", "app": "Chrome", "window": "Essay — The New Yorker",
-   "context": "It was a classic case of l'esprit de l'escalier: the perfect reply arrived only once he was halfway down the stairs."}
+   "context": "It was a classic case of l'esprit de l'escalier: the perfect reply arrived only once he was halfway down the stairs."},
+  {"name": "glasswing", "term": "Glasswing", "app": "Slack", "window": "#security",
+   "context": "Reading list for the week: the SQLite notes on atomic commit, the new fuzzing write-up, and the Glasswing post everyone keeps sharing. Worth knowing the dates."},
+  {"name": "kafka", "term": "Kafka", "app": "Claude", "window": "Workbook plan",
+   "context": "- how Redis, SQLite and Kafka handle the same problems;"},
+  {"name": "pillow", "term": "Pillow", "app": "Claude", "window": "Workbook plan",
+   "context": "- Pillow and which operations release the GIL;"},
+  {"name": "tangent", "term": "Tangent", "app": "Safari", "window": "Show HN",
+   "context": "Show HN: Tangent, a reader that answers questions in the margin of whatever you're reading."}
 ]

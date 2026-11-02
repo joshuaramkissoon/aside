@@ -30,6 +30,9 @@ MainActor.assumeIsolated {
         let delay = (i + 1 < args.count ? Double(args[i + 1]) : nil) ?? 3
         DevTools.probe(after: delay)
         app.run()
+    } else if let i = args.firstIndex(of: "--ask"), i + 1 < args.count {
+        DevTools.ask(term: args[i + 1], context: i + 2 < args.count ? args[i + 2] : "")
+        app.run()
     } else if let i = args.firstIndex(of: "--icon") {
         DevTools.icon(to: i + 1 < args.count ? args[i + 1] : "icon.png")
     } else if let i = args.firstIndex(of: "--shots") {

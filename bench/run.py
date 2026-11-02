@@ -27,6 +27,7 @@ def message(c):
     s += f"\nApp: {c.get('app', 'Claude')}"
     if c.get("window"):
         s += f" — window: {c['window']}"
+    s += "\nToday: " + time.strftime("%-d %B %Y")
     return s
 
 

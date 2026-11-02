@@ -94,6 +94,37 @@ enum DevTools {
         }
     }
 
+    /// Run one look-up headlessly and print each state change with its time: `--ask TERM [CONTEXT]`.
+    static func ask(term: String, context: String) {
+        Task { @MainActor in
+            let s = LookupSession(capture: Capture(term: term, context: context, appName: "Claude", windowTitle: "Notes"))
+            let t0 = CFAbsoluteTimeGetCurrent()
+            var last = ""
+            s.start()
+            while true {
+                try? await Task.sleep(for: .milliseconds(20))
+                guard let turn = s.turns.first else { continue }
+                let label: String
+                switch turn.state {
+                case .waiting: label = "waiting"
+                case .searching(let q): label = "searching \"\(q)\""
+                case .streaming: label = "streaming"
+                case .done: label = "done"
+                case .failed(let m): label = "failed: \(m)"
+                }
+                if label != last {
+                    print(String(format: "%5.0fms  %@", (CFAbsoluteTimeGetCurrent() - t0) * 1000, label))
+                    last = label
+                }
+                if turn.state == .done || label.hasPrefix("failed") {
+                    print(turn.raw)
+                    for src in turn.sources { print("source:", src.site, "—", src.title, src.url.absoluteString.prefix(80)) }
+                    exit(0)
+                }
+            }
+        }
+    }
+
     /// Render the app icon at 1024px (scripts/icon.sh turns it into an .icns).
     static func icon(to path: String) {
         let view = AppIconArt().frame(width: 1024, height: 1024)

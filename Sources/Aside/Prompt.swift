@@ -22,9 +22,12 @@ NEXT:
 Rules:
 - Be concrete. Prefer "pushes the program's buffer to the kernel" over "makes data be written".
 - If the look-up is foreign text, GIST is the translation and KIND is the language.
-- If you are unsure what it means here, say so in the gist and give the most likely reading.
 - No preamble, no headings, no closing remarks.
 - Always finish with the NEXT block and its two questions.
+
+Searching: your knowledge has a cutoff and you can't know everything. If the look-up names something specific you can't confidently identify (a product, project, codename, company, person, paper, release, event, or anything that may be newer than your training), do not guess. Instead reply with exactly one line and nothing else:
+SEARCH: <2 to 4 words naming the thing, plus at most one word for the organisation or field if the surrounding text suggests one (e.g. "Mistral Codestral", "Pillow Python library"). No dates, and no words that only make sense in the reader's own notes.>
+Ordinary words, well-known concepts and established technical terms never need a search.
 """
     // PROMPT:SYSTEM:END
 
@@ -41,10 +44,29 @@ Answer this follow-up in the same shape but without TERM, EXPANDS and KIND: star
         }
         s += "\nApp: \(c.appName)"
         if !c.windowTitle.isEmpty { s += " — window: \(c.windowTitle)" }
+        s += "\nToday: \(today)"
         return s
     }
 
     static func followUpMessage(_ q: String) -> String {
-        "\(q)\n\n(\(followUpRule))"
+        "\(q)\n\n(\(followUpRule) If the answer needs facts you can't confidently recall, reply with only a SEARCH: line instead.)"
+    }
+
+    /// The same request again, now with web results to answer from.
+    static func grounded(_ request: String, query: String, results: SearchResults) -> String {
+        var s = request + "\n\nWeb results for \"\(query)\":\n"
+        if results.summary.nonEmpty != nil { s += results.summary + "\n" }
+        for (i, r) in results.hits.enumerated() where !r.snippet.isEmpty {
+            s += "\n[\(i + 1)] \(r.source.title) (\(r.source.site)): \(r.snippet)"
+        }
+        s += "\n\nAnswer from these results where they apply, in the usual shape. Don't mention searching or the results, and don't reply with SEARCH."
+        return s
+    }
+
+    static var today: String {
+        let f = DateFormatter()
+        f.dateFormat = "d MMMM yyyy"
+        f.locale = Locale(identifier: "en_GB")
+        return f.string(from: Date())
     }
 }
