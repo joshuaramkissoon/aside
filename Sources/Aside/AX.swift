@@ -17,7 +17,8 @@ enum AX {
         return (v as! AXUIElement)
     }
 
-    static func param(_ el: AXUIElement, _ name: String, _ p: CFTypeRef) -> CFTypeRef? {
+    static func param(_ el: AXUIElement, _ name: String, _ p: CFTypeRef?) -> CFTypeRef? {
+        guard let p else { return nil }
         var v: CFTypeRef?
         return AXUIElementCopyParameterizedAttributeValue(el, name as CFString, p, &v) == .success ? v : nil
     }
@@ -34,14 +35,14 @@ enum AX {
         return AXValueGetValue(v as! AXValue, .cgRect, &r) ? r : nil
     }
 
-    static func value(_ r: CFRange) -> AXValue {
+    static func value(_ r: CFRange) -> AXValue? {
         var r = r
-        return AXValueCreate(.cfRange, &r)!
+        return AXValueCreate(.cfRange, &r)
     }
 
-    static func value(_ p: CGPoint) -> AXValue {
+    static func value(_ p: CGPoint) -> AXValue? {
         var p = p
-        return AXValueCreate(.cgPoint, &p)!
+        return AXValueCreate(.cgPoint, &p)
     }
 
     // Text markers: the public C functions work in both WebKit and Chromium
@@ -68,6 +69,12 @@ enum AX {
     }
 
     static func role(_ el: AXUIElement) -> String { string(el, kAXRoleAttribute) ?? "" }
+
+    /// A password field (native or web): Aside never reads these.
+    static func isSecure(_ el: AXUIElement) -> Bool {
+        let secure = kAXSecureTextFieldSubrole as String
+        return role(el) == secure || string(el, kAXSubroleAttribute) == secure
+    }
 
     static func parent(_ el: AXUIElement) -> AXUIElement? { element(el, kAXParentAttribute) }
 

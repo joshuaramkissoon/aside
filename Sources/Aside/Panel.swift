@@ -42,6 +42,23 @@ final class PanelController {
     private var busy = false
     private var hintTimer: Timer?
     var openSettings: () -> Void = {}
+    /// Told about every successful capture (onboarding's try-it step listens).
+    var onLookup: (Capture) -> Void = { _ in }
+
+    /// What to say when a capture finds nothing.
+    static func hintMode(for miss: Capturer.Miss) -> PanelUI.Mode {
+        switch miss {
+        case .secureField:
+            return .hint(title: "That's a password field",
+                         body: "Aside never reads password fields, so there's nothing to look up here.", action: nil)
+        case .slow(let app):
+            return .hint(title: "\(app.isEmpty ? "The app" : app) didn't answer in time",
+                         body: "It may be busy. Try again in a moment, or select the text first.", action: nil)
+        case .nothing:
+            return .hint(title: "Nothing to look up",
+                         body: "Select some text, or point at a word, then press \(Prefs.shortcut.label).", action: nil)
+        }
+    }
 
     init() {
         hosting = NSHostingView(rootView: PanelRoot(ui: ui))
@@ -85,11 +102,13 @@ final class PanelController {
                 return
             }
             guard let cap = await capturer.capture(), !cap.term.isEmpty else {
-                if wasOpen { close(); return }
-                showHint(title: "Nothing to look up",
-                         body: "Select some text, or point at a word, then press \(Prefs.shortcut.label).")
+                if wasOpen && capturer.miss == .nothing { close(); return }
+                if case .hint(let title, let body, _) = Self.hintMode(for: capturer.miss) {
+                    showHint(title: title, body: body)
+                }
                 return
             }
+            onLookup(cap)
             // Same text again: the shortcut toggles the panel closed.
             if wasOpen, let previous, previous == cap {
                 close()
@@ -120,7 +139,7 @@ final class PanelController {
         panel.makeKeyAndOrderFront(nil)
         installKeys()
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.12
+            ctx.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.12
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().alphaValue = 1
         }
@@ -175,8 +194,13 @@ final class PanelController {
         } else {
             target = CGRect(x: mouse.x, y: mouse.y - 10, width: 1, height: 20)
         }
-        let screen = NSScreen.screens.first(where: { $0.frame.contains(CGPoint(x: target.midX, y: target.midY)) })
-            ?? NSScreen.main ?? NSScreen.screens[0]
+        func screen(at p: CGPoint) -> NSScreen? { NSScreen.screens.first(where: { $0.frame.contains(p) }) }
+        // A rect on no screen at all (some apps report stale or off-screen bounds): use the pointer instead.
+        if screen(at: CGPoint(x: target.midX, y: target.midY)) == nil {
+            target = CGRect(x: mouse.x, y: mouse.y - 10, width: 1, height: 20)
+        }
+        guard let screen = screen(at: CGPoint(x: target.midX, y: target.midY)) ?? screen(at: mouse) ?? NSScreen.main
+                ?? NSScreen.screens.first else { return }
         screenFrame = screen.visibleFrame
         let gap: CGFloat = 8
         let roomBelow = target.minY - screenFrame.minY - gap
@@ -270,10 +294,13 @@ final class PanelController {
 
 enum Permissions {
     static func openAccessibility() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
     }
     static func openScreenRecording() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+    }
+    private static func open(_ s: String) {
+        if let u = URL(string: s) { NSWorkspace.shared.open(u) }
     }
     static func promptAccessibility() {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary

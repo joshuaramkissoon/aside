@@ -150,6 +150,16 @@ final class LookupSession: ObservableObject, Identifiable {
         return s
     }
 
+    /// For snapshots: add a follow-up as if it had just been asked, part-way through streaming.
+    func appendFixtureTurn(question: String, raw: String, streaming: Bool) {
+        var t = Turn()
+        t.question = question
+        t.raw = raw
+        t.answer = Answer.parse(raw, streaming: streaming)
+        t.state = streaming ? .streaming : .done
+        turns.append(t)
+    }
+
     /// Attach web sources to the first turn of a fixture.
     func withSources(_ sources: [WebSource]) -> LookupSession {
         if !turns.isEmpty { turns[0].sources = sources }

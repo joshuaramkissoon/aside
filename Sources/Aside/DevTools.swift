@@ -4,6 +4,56 @@ import SwiftUI
 /// Development helpers: real-window screenshots of fixed states, and a capture probe.
 @MainActor
 enum DevTools {
+    nonisolated static func markdown() {
+        let o = String(Inline.openEnd)
+        let cases = [
+            "==spawned through its own `Scope` handle==, not *others*",
+            "**bold ==mark== inside** and ==mark **bold** inside==",
+            "see [the docs](https://example.com/a_(b)) or https://rust-lang.org/learn.",
+            "escaped \\*not italic\\* and snake_case_name and __init__",
+            "a * b * c and 2*3",
+            "streaming **bold with no end" + o,
+            "streaming ==mark" + o,
+            "trailing half marker *" + o,
+            "trailing =" + o,
+            "link arriving [Rust book](https://doc.rust" + o,
+            "code `std::async" + o,
+            "``a ` b`` and ~~gone~~",
+        ]
+        for s in cases {
+            let rs = Inline.runs(s).map { r -> String in
+                var tags: [String] = []
+                if r.style.contains(.mark) { tags.append("M") }
+                if r.style.contains(.bold) { tags.append("B") }
+                if r.style.contains(.italic) { tags.append("I") }
+                if r.style.contains(.code) { tags.append("C") }
+                if r.style.contains(.strike) { tags.append("S") }
+                if let l = r.link { tags.append("L=" + l.absoluteString) }
+                return "[\(tags.joined(separator: ","))]\(r.text)"
+            }
+            print(s.replacingOccurrences(of: o, with: "⟨open⟩"), "\n   →", rs.joined(separator: " | "))
+        }
+        let a = Answer.parse("""
+TERM: `std::future`
+KIND: c++ concurrency primitives
+GIST: A ==**one-shot** channel==.
+# Heading here
+1. first
+2. second
+   - nested bullet
+      - deeper
+> a quote
+| A | B |
+|---|---|
+| `x` | **y** |
+NEXT:
+? How does it differ from `std::async`?
+""", streaming: false)
+        print(a.term ?? "-", "|", a.kind ?? "-", "|", a.gist)
+        for b in a.blocks { print("  ", b) }
+        print("  next:", a.next)
+    }
+
     static func probe(after delay: Double) {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
@@ -110,9 +160,10 @@ enum DevTools {
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         Task { @MainActor in
             let pc = PanelController()
-            let screen = NSScreen.screens[0].frame
             let anchor = CGRect(x: 260, y: 140, width: 60, height: 22)
-            var cases: [(String, () -> PanelUI.Mode)] = []
+            let env = ProcessInfo.processInfo.environment
+            func fail(_ m: String) -> @MainActor () -> PanelUI.Mode { { .lookup(LookupSession.failedFixture(Fixtures.flushCapture, m)) } }
+            var cases: [(String, @MainActor () -> PanelUI.Mode)] = []
             cases.append(("flush", { .lookup(Fixtures.flush()) }))
             cases.append(("lru", { .lookup(Fixtures.lru()) }))
             cases.append(("thread", { .lookup(Fixtures.thread()) }))
@@ -120,44 +171,51 @@ enum DevTools {
             cases.append(("prose", { .lookup(Fixtures.prose()) }))
             cases.append(("searching", { .lookup(Fixtures.searching()) }))
             cases.append(("sourced", { .lookup(Fixtures.sourced()) }))
-            cases.append(("error", { .lookup(LookupSession.failedFixture(Fixtures.flushCapture, EngineError.noKey.errorDescription!)) }))
+            cases.append(("error", fail(EngineError.noKey.errorDescription ?? "")))
             cases.append(("hint", { .hint(title: "Nothing to look up", body: "Select some text, or point at a word, then press ⌥ Space.", action: nil) }))
-            let only = ProcessInfo.processInfo.environment["SHOTS"]?.split(separator: ",").map(String.init)
-            let themes = ProcessInfo.processInfo.environment["THEMES"]?.split(separator: ",").map(String.init) ?? Palette.all.map(\.id)
-            let looks = ProcessInfo.processInfo.environment["LOOKS"]?.split(separator: ",").map(String.init) ?? ["dark", "light"]
+            // Edge cases.
+            cases.append(("longkind", { .lookup(Fixtures.longKind()) }))
+            cases.append(("longtitle", { .lookup(Fixtures.longTitle()) }))
+            cases.append(("passage", { .lookup(Fixtures.passage()) }))
+            cases.append(("markdown", { .lookup(Fixtures.markdown()) }))
+            cases.append(("widecode", { .lookup(Fixtures.wideCode()) }))
+            cases.append(("longsugg", { .lookup(Fixtures.longSuggestions()) }))
+            cases.append(("streaming", { .lookup(Fixtures.streaming()) }))
+            cases.append(("followup", { .lookup(Fixtures.followUpBase()) }))
+            cases.append(("badkey", fail(EngineError.http(401, "").errorDescription ?? "")))
+            cases.append(("ratelimit", fail(EngineError.http(429, "").errorDescription ?? "")))
+            cases.append(("offline", fail(URLError(.notConnectedToInternet).localizedDescription)))
+            cases.append(("timeout", fail(URLError(.timedOut).localizedDescription)))
+            cases.append(("secure", { PanelController.hintMode(for: .secureField) }))
+            let defaults = ["flush", "lru", "thread", "loading", "prose", "searching", "sourced", "error", "hint"]
+            let only = env["SHOTS"].map { $0 == "all" ? cases.map(\.0) : $0.split(separator: ",").map(String.init) } ?? defaults
+            let themes = env["THEMES"]?.split(separator: ",").map(String.init) ?? Palette.all.map(\.id)
+            let looks = env["LOOKS"]?.split(separator: ",").map(String.init) ?? ["dark", "light"]
             for theme in themes {
                 Settings.shared.theme = theme
                 for look in looks {
                     pc.panel.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua)
-                    for (name, make) in cases where only == nil || only!.contains(name) {
-                        pc.showFixture(make(), anchor: anchor)
-                        try? await Task.sleep(for: .milliseconds(name == "loading" ? 350 : 700))
-                        let path = "\(dir)/\(theme)-\(look)-\(name).png"
-                        shoot(window: pc.panel.windowNumber, to: path)
+                    for (name, make) in cases where only.contains(name) {
+                        let mode = make()
+                        pc.showFixture(mode, anchor: anchor)
+                        if name == "followup", case .lookup(let s) = mode {
+                            // Ask a follow-up the way the keyboard does, so the real scroll path runs.
+                            try? await Task.sleep(for: .milliseconds(500))
+                            s.appendFixtureTurn(question: "Does a scope wait for threads spawned inside it?", raw: Fixtures.scopeRaw, streaming: true)
+                        }
+                        try? await Task.sleep(for: .milliseconds(name == "loading" ? 350 : 800))
+                        shoot(window: pc.panel.windowNumber, to: "\(dir)/\(theme)-\(look)-\(name).png")
                         pc.panel.orderOut(nil)
                     }
                 }
             }
-            if ProcessInfo.processInfo.environment["SETTINGS"] != nil {
-                for look in looks {
-                    let w = NSWindow(contentRect: NSRect(x: 80, y: screen.height - 760, width: 540, height: 660),
-                                     styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
-                    w.titlebarAppearsTransparent = true
-                    w.titleVisibility = .hidden
-                    w.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua)
-                    w.contentView = NSHostingView(rootView: SettingsView())
-                    w.orderFrontRegardless()
-                    try? await Task.sleep(for: .milliseconds(800))
-                    shoot(window: w.windowNumber, to: "\(dir)/settings-\(look).png")
-                    w.orderOut(nil)
-                }
-            }
+            await windowShots(into: dir, looks: looks)
             print("shots in \(dir)")
             exit(0)
         }
     }
 
-    private static func shoot(window: Int, to path: String) {
+    static func shoot(window: Int, to path: String) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         p.arguments = ["-x", "-l", String(window), path]

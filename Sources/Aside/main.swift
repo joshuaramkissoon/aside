@@ -22,6 +22,12 @@ if args.contains("--import-key") {
     exit(saved.isEmpty ? 1 : 0)
 }
 
+// `Aside --markdown` prints how the inline parser reads some tricky strings (development).
+if args.contains("--markdown") {
+    DevTools.markdown()
+    exit(0)
+}
+
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)

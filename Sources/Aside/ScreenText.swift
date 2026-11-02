@@ -72,12 +72,12 @@ final class ScreenText {
         let ls = await lines(around: p)
         guard !ls.isEmpty else { return nil }
         let first = term.split(separator: " ").first.map(String.init) ?? term
-        let idx = ls.indices.min(by: { a, b in
+        guard let idx = ls.indices.min(by: { a, b in
             let ha = ls[a].text.localizedCaseInsensitiveContains(first) ? 0 : 1
             let hb = ls[b].text.localizedCaseInsensitiveContains(first) ? 0 : 1
             if ha != hb { return ha < hb }
             return abs(ls[a].rect.midY - p.y) < abs(ls[b].rect.midY - p.y)
-        })!
+        }) else { return nil }
         let (ctx, rel) = join(ls, focus: idx, term: term, near: p)
         return (ctx, rel, ls[idx].rect)
     }
