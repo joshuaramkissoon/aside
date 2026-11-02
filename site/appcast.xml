@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Aside</title>
+    <link>https://aside-mac.vercel.app</link>
+    <description>Aside for Mac updates</description>
+    <language>en</language>
+    <item>
+      <title>Aside 0.3.0</title>
+      <pubDate>Mon, 02 Nov 2026 16:37:48 GMT</pubDate>
+      <sparkle:version>17</sparkle:version>
+      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.2</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/joshuaramkissoon/aside/releases/tag/v0.3.0</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/joshuaramkissoon/aside/releases/download/v0.3.0/Aside-0.3.0.dmg" length="3727203" type="application/octet-stream" sparkle:edSignature="0uWUnAEUNDK+f6yQUwRqEP68U/c3gsj+wVKdZA3jm+U8cp2ISS1jNS9/+Jhb/VhreNs04ubQYd3hMAuzu3fsDQ==" />
+    </item>
+  </channel>
+</rss>
