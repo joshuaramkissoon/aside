@@ -57,14 +57,15 @@
       <div class="win-bar"><i></i><i></i><i></i><span>Storage notes</span></div>
       <div class="win-body">
         <p class="doc-h">Durability</p>
-        <p>The steps people mix up: write vs <span class="word" data-anchor>flush<span class="word-mark"></span></span> vs fsync vs fsyncing the directory. Each one moves the bytes closer to the disk, and each one costs more than the last.</p>
-        <p>Postgres and SQLite get this right by default. Most hand-rolled storage finds out after its first power cut, when the file is there but the last second of writes isn't.</p>
+        <p>The steps people mix up: write vs <span class="word" data-anchor>flush<span class="word-read"></span></span> vs fsync vs <span class="phrase" data-phrase><span class="sel"></span>fsyncing the directory</span>. Each one moves the bytes closer to the disk, and each one costs more than the last.</p>
+        <p>Postgres and SQLite get this right by default. Most hand-rolled storage finds out after its first power cut, when the file is there but the last second of writes isn’t.</p>
         <p>So the order matters. Write the data, fsync the file, rename it into place, then fsync the directory that holds it.</p>
       </div>
 
-      <svg class="ibeam" viewBox="0 0 14 24" width="14" height="24"><path d="M3 2.2c1.6 0 3.1.5 4 1.6.9-1.1 2.4-1.6 4-1.6M7 3.8v16.4M3 21.8c1.6 0 3.1-.5 4-1.6.9 1.1 2.4 1.6 4 1.6M5.2 12h3.6" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><path d="M3 2.2c1.6 0 3.1.5 4 1.6.9-1.1 2.4-1.6 4-1.6M7 3.8v16.4M3 21.8c1.6 0 3.1-.5 4-1.6.9 1.1 2.4 1.6 4 1.6M5.2 12h3.6" fill="none" stroke="#111" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <svg class="ibeam" viewBox="0 0 14 24" width="14" height="24"><use href="#ibeam-sym"/></svg>
 
-      <div class="panel-wrap">
+      <!-- Moment 1: pointed at "flush" -->
+      <div class="panel-wrap panel-a">
         <div class="panel">
           <div class="p-body">
             <div class="p-eyebrow">
@@ -84,10 +85,6 @@
                 <li class="stream">Survives a process crash, <strong>not</strong> a power cut.</li>
               </ul>
             </div>
-            <div class="p-turn p-follow">
-              <div class="p-q"><svg class="arr" viewBox="0 0 12 12"><path d="M2.5 1.5v4.2a2.3 2.3 0 0 0 2.3 2.3h5.7M7.8 5.3l2.7 2.7-2.7 2.7"/></svg><span>Why fsync the directory too?</span></div>
-              <p class="p-gist p-gist-sm stream">Creating or renaming a file changes its <mark>directory entry</mark>, which lives in a separate block. Fsync only the file and a crash can still lose its name.</p>
-            </div>
           </div>
           <div class="p-foot">
             <div class="p-sugs">
@@ -95,9 +92,52 @@
                 <li><kbd>⌘1</kbd><span>Why fsync the directory too?</span></li>
                 <li><kbd>⌘2</kbd><span>How does a write-ahead log use this?</span></li>
               </ol>
+            </div>
+            <div class="p-input">
+              <svg class="arr" viewBox="0 0 12 12"><path d="M2.5 1.5v4.2a2.3 2.3 0 0 0 2.3 2.3h5.7M7.8 5.3l2.7 2.7-2.7 2.7"/></svg>
+              <span class="p-caret"></span><span class="p-ph">Ask a follow-up</span>
+              <span class="p-pulse"><i></i><i></i><i></i></span>
+              <span class="p-esc">esc</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Moments 2 and 3: selected "fsyncing the directory", then ⌘1 -->
+      <div class="panel-wrap panel-b">
+        <div class="panel">
+          <div class="p-body">
+            <div class="p-eyebrow">
+              <span class="p-app"></span>
+              <span class="p-snip"><b>Notes</b>&ensp;<i>write vs flush vs fsync vs <strong>fsyncing the directory</strong></i></span>
+            </div>
+            <div class="p-title stacked">
+              <span class="p-term">fsyncing the directory</span>
+              <span class="p-kind">filesystem durability step</span>
+            </div>
+            <div class="p-turn p-first">
+              <div class="p-skel"><i></i><i></i></div>
+              <p class="p-gist stream">Flushing the <mark>directory’s own metadata</mark> to disk, so a newly created or renamed file survives a crash.</p>
+              <span class="p-rule"></span>
+              <ul class="p-bullets">
+                <li class="stream"><code>fsync</code> on a file persists its contents and size; the directory entry linking name to inode is separate data, so it needs its own <code>fsync</code>.</li>
+                <li class="stream">Skipping it is the classic bug: after a power cut the file’s data is on disk but the name is gone, or the rename never happened.</li>
+              </ul>
+            </div>
+            <div class="p-turn p-follow">
+              <div class="p-q"><svg class="arr" viewBox="0 0 12 12"><path d="M2.5 1.5v4.2a2.3 2.3 0 0 0 2.3 2.3h5.7M7.8 5.3l2.7 2.7-2.7 2.7"/></svg><span>Does ext4 need this after a rename?</span></div>
+              <p class="p-gist p-gist-sm stream">Yes — after a rename, ext4 needs an <mark><code>fsync</code> on the directory</mark> to guarantee the new name survives a crash.</p>
+            </div>
+          </div>
+          <div class="p-foot">
+            <div class="p-sugs">
+              <ol class="p-sug-set p-sug-a">
+                <li><kbd>⌘1</kbd><span>Does ext4 need this after a rename?</span></li>
+                <li><kbd>⌘2</kbd><span>How does SQLite do it?</span></li>
+              </ol>
               <ol class="p-sug-set p-sug-b">
-                <li><kbd>⌘1</kbd><span>Does rename ever leave neither name?</span></li>
-                <li><kbd>⌘2</kbd><span>How does SQLite fsync its journal?</span></li>
+                <li><kbd>⌘1</kbd><span>Does O_DIRECTORY matter here?</span></li>
+                <li><kbd>⌘2</kbd><span>What about fsync on the parent?</span></li>
               </ol>
             </div>
             <div class="p-input">
@@ -117,7 +157,19 @@
         <div class="chord chord-b"><span class="key"><span class="cap">⌘</span></span><span class="key"><span class="cap">1</span></span></div>
       </div>
       <figcaption>
-        <span class="cap-text">Point, press <span class="nw"><kbd>⌥</kbd>&#8202;<kbd>Space</kbd></span>, read. <span class="nw"><kbd>⌘</kbd><kbd>1</kbd></span> asks the first suggestion.</span>
+        <div class="moments">
+          <div class="steps" role="group" aria-label="Show a step of the demo">
+            <button type="button" data-step="1" aria-label="Step 1 of 3: point at a word">1</button>
+            <button type="button" data-step="2" aria-label="Step 2 of 3: select a phrase">2</button>
+            <button type="button" data-step="3" aria-label="Step 3 of 3: keep asking">3</button>
+          </div>
+          <p class="cap-text">
+            <span class="sr">Point at a word and press Option-Space; no need to select. Or select a phrase. Then keep asking: Command-1 asks the first suggestion.</span>
+            <span class="cap-step is-on" data-step="1" aria-hidden="true">Point at a word. No need to select.</span>
+            <span class="cap-step" data-step="2" aria-hidden="true">Or select a phrase.</span>
+            <span class="cap-step" data-step="3" aria-hidden="true">Then keep asking.</span>
+          </p>
+        </div>
         <button class="motion-toggle" type="button" aria-pressed="false">Pause</button>
       </figcaption>
     </div>
@@ -165,7 +217,30 @@
   </table>
 </section>
 
-<!-- 3. Behaviours -->
+<!-- 3. Try it here -->
+<section class="try" id="try" aria-labelledby="try-title">
+  <div class="section-head">
+    <p class="label">Try it here</p>
+    <h2 id="try-title">Try it on this page.</h2>
+    <p class="try-hint try-hint-key">Rest the pointer on an underlined word and press <span class="nw"><kbd>⌥</kbd>&#8202;<kbd>Space</kbd></span>. Or select a phrase first, then press it. A click works too.</p>
+    <p class="try-hint try-hint-touch">Tap a word, or select a phrase.</p>
+  </div>
+
+  <div class="try-stage">
+    <article class="try-doc" aria-label="A sample document to try look-ups on">
+      <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Storage review</span></div>
+      <div class="try-body" data-prose>
+        <p class="doc-h">Notes for Thursday</p>
+        <p>Before we call the new store durable, check the boring parts. Every commit goes to the <span class="t" data-look="wal">write-ahead log</span> first, and we <span class="t" data-look="fsync">fsync</span> it before telling the client the data is safe. A <span class="t" data-look="flush">flush</span> on its own only gets the bytes as far as the kernel. Compaction writes a fresh file and renames it over the old one, so it also needs <span class="t" data-look="fsyncdir">fsyncing the directory</span>, or a power cut can quietly undo the rename.</p>
+        <p>Reads are the other half. The block cache is plain <span class="t" data-look="lru">LRU</span>, so one big scan can push out everything hot. <span class="t" data-look="mvcc">MVCC</span> keeps readers from blocking writers, but old row versions pile up until <span class="t" data-look="vacuum">vacuum</span> catches up. And I’d take the <span class="t" data-look="memo">memoisation</span> out of the query planner until we know why its plans go stale.</p>
+        <p>For the reading list: the SQLite notes on atomic commit, and the <span class="t" data-look="glasswing">Glasswing</span> post everyone in the security channel keeps sharing.</p>
+      </div>
+    </article>
+  </div>
+  <p class="try-note">Every answer here is real output from the model Aside uses, saved into the page. Nothing you do here is sent anywhere.</p>
+</section>
+
+<!-- 4. Behaviours -->
 <section class="details" aria-labelledby="details-title">
   <div class="section-head">
     <p class="label">The details</p>
@@ -177,11 +252,12 @@
     <article class="det" id="v-point">
       <div class="det-copy">
         <h3><span class="num">1</span>No selection needed</h3>
-        <p>Point at any part of a term and Aside works out the whole of it. Point at “ahead” and it explains the write-ahead log.</p>
+        <p>Nothing to highlight first. Rest the cursor on any part of a term and press <span class="nw"><kbd>⌥</kbd>&#8202;<kbd>Space</kbd></span>. Point at “ahead” and Aside explains the whole write-ahead log.</p>
       </div>
       <div class="vig" aria-hidden="true">
-        <p class="vig-line">On restart, Postgres replays the <span class="term-wrap"><span class="vmark vmark-all"></span>write-<span class="vword"><span class="vmark vmark-one"></span>ahead</span> log</span> from the last checkpoint.</p>
+        <p class="vig-line">On restart, Postgres replays the <span class="term-wrap"><span class="vread vread-all"></span>write-<span class="vword"><span class="vread vread-one"></span>ahead</span> log</span> from the last checkpoint.</p>
         <svg class="ibeam" viewBox="0 0 14 24" width="14" height="24"><use href="#ibeam-sym"/></svg>
+        <p class="vig-keys"><kbd>⌥</kbd><kbd>Space</kbd></p>
         <div class="mini vig-panel">
           <div class="p-title"><span class="p-term">write-ahead log</span><span class="p-kind">Recovery</span></div>
           <p class="p-gist stream">Changes are logged <mark>before they touch the data files</mark>, so a crash can be replayed from it.</p>
@@ -195,8 +271,9 @@
         <p>The expansion comes first, with the initials picked out, so the acronym reads itself.</p>
       </div>
       <div class="vig" aria-hidden="true">
-        <p class="vig-line">Evict with <span class="vword"><span class="vmark vmark-one"></span>LRU</span> once the cache passes 512 MB.</p>
+        <p class="vig-line">Evict with <span class="vword"><span class="vread vread-one"></span>LRU</span> once the cache passes 512 MB.</p>
         <svg class="ibeam" viewBox="0 0 14 24" width="14" height="24"><use href="#ibeam-sym"/></svg>
+        <p class="vig-keys"><kbd>⌥</kbd><kbd>Space</kbd></p>
         <div class="mini vig-panel">
           <div class="p-title"><span class="p-term">LRU</span><span class="p-kind">Cache policy</span></div>
           <p class="p-exp"><span><b>L</b><i>east</i></span> <span><b>R</b><i>ecently</i></span> <span><b>U</b><i>sed</i></span></p>
@@ -238,8 +315,9 @@
         <p>If a term is newer than the model, Aside searches the web first and shows you where the answer came from.</p>
       </div>
       <div class="vig" aria-hidden="true">
-        <p class="vig-line">Check the layout in <span class="vword"><span class="vmark vmark-one"></span>Ladybird</span> too, since it has its own engine.</p>
+        <p class="vig-line">Check the layout in <span class="vword"><span class="vread vread-one"></span>Ladybird</span> too, since it has its own engine.</p>
         <svg class="ibeam" viewBox="0 0 14 24" width="14" height="24"><use href="#ibeam-sym"/></svg>
+        <p class="vig-keys"><kbd>⌥</kbd><kbd>Space</kbd></p>
         <div class="mini vig-panel">
           <div class="p-title"><span class="p-term">Ladybird</span><span class="p-kind">Web browser</span></div>
           <div class="web-slot">
@@ -254,7 +332,7 @@
   </div>
 </section>
 
-<!-- 4. Get it -->
+<!-- 5. Get it -->
 <section class="get" id="get" aria-labelledby="get-title">
   <img class="get-icon" src="img/apple-touch-icon.png" width="88" height="88" alt="The Aside app icon: a serif letter a on a red highlighter stroke">
   <h2 id="get-title">Try it on the next word you don’t know.</h2>
@@ -279,5 +357,7 @@
 </svg>
 
 <script src="main.js" defer></script>
+<script src="answers.js" defer></script>
+<script src="try.js" defer></script>
 </body>
 </html>

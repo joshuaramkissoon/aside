@@ -24,7 +24,8 @@
       const parts = n.textContent.match(/\s+|\S+\s*/g) || [];
       const frag = document.createDocumentFragment();
       for (const p of parts) {
-        if (!p.trim()) { frag.append(p); continue; }
+        // Spaces inside a mark keep its highlight, so they get a span too.
+        if (!p.trim() && !n.parentElement.closest('mark')) { frag.append(p); continue; }
         const s = document.createElement('span');
         s.className = 'w';
         s.textContent = p;
@@ -52,7 +53,7 @@
         this.width = w;
         if (!this.started) return;
         clearTimeout(this.rt);
-        this.rt = setTimeout(() => this.start(), 180);
+        this.rt = setTimeout(() => this.start(this.from, this.still), 180);
       }).observe(root);
     }
     get running() { return this.visible && !userPaused && !document.hidden; }
@@ -104,23 +105,28 @@
       if (this.running) this.anims.forEach(a => { if (a.held) { a.held = false; a.play(); } });
       else this.anims.forEach(a => { if (a.playState === 'running') { a.pause(); a.held = true; } });
     }
-    async start() {
+    // `from` lets a script start part-way (the hero's steps); `still` renders the final state at once.
+    async start(from = 1, still = reduce.matches) {
       this.started = true;
+      this.from = from;
       const gen = ++this.gen;
       this.reset();
       this.script.layout?.(this);
-      if (reduce.matches) {
+      if (still) {
         this.root.classList.add('is-static');
+        this.still = true;
         this.instant = true;
         await this.script.build(this);
         this.instant = false;
         return;
       }
+      this.still = false;
       this.root.classList.remove('is-static');
       while (gen === this.gen) {
         await this.script.build(this);
         await this.script.out(this);
         if (gen !== this.gen) return;
+        this.from = 1;
         this.reset();
         this.script.layout?.(this);
       }
@@ -149,145 +155,252 @@
   }
 
   // ---------- Hero ----------
+  // Three captioned moments: point at a word (nothing selected), select a phrase, keep asking.
+  // The step buttons jump to a moment; when paused or with reduced motion they show its still.
 
   const hero = $('#hero-demo');
+  let heroRunner = null;
   if (hero) {
     const win = $('.win', hero);
-    const word = $('[data-anchor]', hero);
-    const mark = $('.word-mark', hero);
     const beam = $('.ibeam', hero);
-    const wrap = $('.panel-wrap', hero);
-    const panel = $('.panel', hero);
-    const foot = $('.p-foot', hero);
-    const first = $('.p-first', hero);
-    const follow = $('.p-follow', hero);
-    const input = $('.p-input', hero);
-    const sugA = $('.p-sug-a', hero), sugB = $('.p-sug-b', hero);
+    const word = $('[data-anchor]', hero);
+    const read = $('.word-read', hero);
+    const phrase = $('[data-phrase]', hero);
+    const sel = $('.sel', phrase);
     const [optKey, spaceKey] = $$('.chord-a .cap', hero);
     const [cmdKey, oneKey] = $$('.chord-b .cap', hero);
     const chordA = $('.chord-a', hero), chordB = $('.chord-b', hero);
-    const skel = $('.p-skel', hero), gist = $('.p-gist', first);
-    const sugs = $('.p-sugs', hero);
+    const stepBtns = $$('.steps button', hero), caps = $$('.cap-step', hero);
     const compact = () => hero.offsetWidth < 560;
-    let path, m = {}, shape = null;
+    const appear = [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }];
+    const at = p => `translate(${p.x - 7}px, ${p.y - 12}px)`;
+    let pos = {}, edges = [];
 
     // Bullet dots arrive with their bullet, so make them real elements.
     $$('.p-bullets li', hero).forEach(li => li.prepend(Object.assign(document.createElement('span'), { className: 'dot' })));
 
-    // The panel is laid out at its final size. Showing content down to y (and the
-    // suggestions or not) clips the bottom off and slides the footer up to meet it.
-    function setShape(r, y, withSugs, duration = 260) {
-      const visible = y + m.padB + (withSugs ? m.sugsH : 0) + m.inputH;
-      const next = { inset: m.H - visible, foot: y - m.followB, input: withSugs ? 0 : -m.sugsH };
-      const prev = shape || next;
-      const o = { duration, easing: 'cubic-bezier(.3,.7,.2,1)' };
-      r.anim(panel, [{ clipPath: `inset(0px 0px ${prev.inset}px 0px round 16px)` }, { clipPath: `inset(0px 0px ${next.inset}px 0px round 16px)` }], o);
-      r.anim(foot, [{ transform: `translateY(${prev.foot}px)` }, { transform: `translateY(${next.foot}px)` }], o);
-      r.anim(input, [{ transform: `translateY(${prev.input}px)` }, { transform: `translateY(${next.input}px)` }], o);
-      shape = next;
+    function setStep(n) {
+      stepBtns.forEach(b => b.classList.toggle('is-on', +b.dataset.step === n));
+      caps.forEach(c => c.classList.toggle('is-on', +c.dataset.step === n));
+    }
+
+    // One Aside panel in the window, laid out at its final size. Showing content down to y
+    // clips the bottom off and slides the footer up to meet it.
+    function heroPanel(wrap) {
+      const panel = $('.panel', wrap), foot = $('.p-foot', wrap), input = $('.p-input', wrap);
+      const first = $('.p-first', wrap), follow = $('.p-follow', wrap);
+      const skel = $('.p-skel', wrap), gist = $('.p-gist', first), sugs = $('.p-sugs', wrap);
+      const sugA = $('.p-sug-a', wrap), sugB = $('.p-sug-b', wrap);
+      let m = {}, shape = null;
+
+      function setShape(r, y, withSugs, duration = 260) {
+        const visible = y + m.padB + (withSugs ? m.sugsH : 0) + m.inputH;
+        const next = { inset: m.H - visible, foot: y - m.endB, input: withSugs ? 0 : -m.sugsH };
+        const prev = shape || next;
+        const o = { duration, easing: 'cubic-bezier(.3,.7,.2,1)' };
+        r.anim(panel, [{ clipPath: `inset(0px 0px ${prev.inset}px 0px round 16px)` }, { clipPath: `inset(0px 0px ${next.inset}px 0px round 16px)` }], o);
+        r.anim(foot, [{ transform: `translateY(${prev.foot}px)` }, { transform: `translateY(${next.foot}px)` }], o);
+        r.anim(input, [{ transform: `translateY(${prev.input}px)` }, { transform: `translateY(${next.input}px)` }], o);
+        shape = next;
+      }
+
+      return {
+        wrap,
+        // Place under the anchor; returns how far down the window the panel reaches.
+        layout(anchor) {
+          shape = null;
+          const W = win.getBoundingClientRect(), R = anchor.getBoundingClientRect();
+          const top = R.bottom - W.top + 8;
+          wrap.style.left = clamp(R.left - W.left - 22, 8, W.width - wrap.offsetWidth - 8) + 'px';
+          wrap.style.top = top + 'px';
+          const T = panel.getBoundingClientRect().top;
+          const below = el => el.getBoundingClientRect().bottom - T;
+          m = {
+            H: panel.offsetHeight,
+            padB: parseFloat(getComputedStyle($('.p-body', wrap)).paddingBottom),
+            sugsH: sugs.offsetHeight,
+            inputH: input.offsetHeight,
+            skelB: below(skel),
+            gistB: below(gist),
+            firstB: below(first),
+            followB: follow ? below(follow) : 0,
+            endB: below(follow || first),
+          };
+          return top + m.H;
+        },
+
+        // ⌥ Space was pressed: open with a placeholder, then stream the answer in.
+        async open(r) {
+          setShape(r, m.skelB, false, 0);
+          r.anim(wrap, [
+            { opacity: 0, transform: 'translateY(-6px) scale(.985)' },
+            { opacity: 1, transform: 'none' },
+          ], { duration: 220 });
+          r.fade(skel, 1, 120);
+          r.cls(input, 'busy');
+          await r.wait(340);
+          r.fade(skel, 0, 100);
+          r.fade($('.p-kind', wrap), 1, 220);
+          setShape(r, m.gistB, false, 200);
+          await r.stream(gist, 30);
+          const bullets = $$('.p-bullets li', wrap).filter(li => li.offsetParent);
+          if (bullets.length) {
+            r.fade($('.p-rule', wrap), 1, 200);
+            setShape(r, m.firstB, false, 320);
+            for (const b of bullets) await r.stream(b, 15);
+          }
+          setShape(r, m.firstB, true, 220);
+          r.anim(sugA, appear, { duration: 220, delay: 60 });
+          r.cls(input, 'busy', false);
+        },
+
+        // ⌘1 asks the first suggestion; the panel grows to hold the follow-up.
+        async ask(r) {
+          r.cls($('li', sugA), 'lit');
+          await r.wait(260);
+          r.cls(input, 'busy');
+          r.fade(sugA, 0, 120);
+          setShape(r, m.followB, false, 420);
+          r.fade($('.p-q', follow), 1, 220, { delay: 120 });
+          await r.wait(420);
+          await r.stream($('.p-gist', follow), 30);
+          r.cls(input, 'busy', false);
+          setShape(r, m.followB, true, 220);
+          r.anim(sugB, appear, { duration: 220, delay: 60 });
+        },
+      };
+    }
+
+    const A = heroPanel($('.panel-a', hero));
+    const B = heroPanel($('.panel-b', hero));
+
+    async function optionSpace(r) {
+      press(r, optKey, 420);
+      await r.wait(160);
+      press(r, spaceKey, 200);
+      await r.wait(120);
+    }
+
+    // 1. Point: the I-beam rests on "flush". Nothing is selected; once ⌥ Space is pressed,
+    // a faint underline shows which word was read.
+    async function point(r) {
+      setStep(1);
+      await r.wait(600);
+      r.fade(beam, 1, 250);
+      await r.wait(250);
+      r.anim(beam, [{ transform: at(pos.start) }, { transform: at(pos.word) }], { duration: 1150, easing: GLIDE });
+      await r.wait(1500);
+      await optionSpace(r);
+      r.anim(read, [{ opacity: 0, transform: 'scaleX(.4)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
+      await A.open(r);
+      await r.wait(2600);
+    }
+
+    // 2. Select: a real drag, the selection snapping to each character as the cursor passes it.
+    async function select(r, fromWord) {
+      setStep(2);
+      let from = pos.start;
+      if (fromWord) {
+        from = pos.word;
+        r.fade(A.wrap, 0, 240);
+        r.fade(read, 0, 240);
+        await r.wait(700);
+      } else {
+        await r.wait(600);
+        r.fade(beam, 1, 250);
+        await r.wait(250);
+      }
+      r.anim(beam, [{ transform: at(from) }, { transform: at(pos.selFrom) }], { duration: 950, easing: GLIDE });
+      await r.wait(1250);
+      const W = edges[edges.length - 1], D = 1150;
+      const frames = [{ width: '0px', offset: 0, easing: 'steps(1, end)' }];
+      for (let i = 1; i < edges.length; i++) {
+        frames.push({ width: edges[i] + 'px', offset: clamp((edges[i - 1] + edges[i]) / 2 / W, 0, 1), easing: 'steps(1, end)' });
+      }
+      frames.push({ width: W + 'px', offset: 1 });
+      r.anim(sel, frames, { duration: D, easing: 'linear' });
+      r.anim(beam, [{ transform: at(pos.selFrom) }, { transform: at(pos.selTo) }], { duration: D, easing: 'linear' });
+      await r.wait(D + 500);
+      await optionSpace(r);
+      await B.open(r);
+      await r.wait(1600);
+    }
+
+    // 3. Keep asking.
+    async function ask(r) {
+      setStep(3);
+      await r.wait(400);
+      r.fade(chordA, 0, 200);
+      r.fade(chordB, 1, 200);
+      await r.wait(520);
+      press(r, cmdKey, 420);
+      await r.wait(160);
+      press(r, oneKey, 200);
+      await r.wait(70);
+      await B.ask(r);
+      await r.wait(4400);
     }
 
     const script = {
-      layout() {
-        shape = null;
+      layout(r) {
+        setStep(r.from || 1);
+        hero.classList.toggle('is-compact', compact());
         win.style.minHeight = '';
-        const W = win.getBoundingClientRect(), R = word.getBoundingClientRect();
-        const pw = wrap.offsetWidth;
-        const left = clamp(R.left - W.left - 22, 8, W.width - pw - 8);
-        const top = R.bottom - W.top + 8;
-        wrap.style.left = left + 'px';
-        wrap.style.top = top + 'px';
-        const P = panel.getBoundingClientRect().top;
-        const below = el => el.getBoundingClientRect().bottom - P;
-        m = {
-          H: panel.offsetHeight,
-          padB: parseFloat(getComputedStyle($('.p-body', hero)).paddingBottom),
-          sugsH: sugs.offsetHeight,
-          inputH: input.offsetHeight,
-          skelB: below(skel),
-          gistB: below(gist),
-          firstB: below(first),
-          followB: below(follow),
+        const reach = Math.max(A.layout(word), B.layout(phrase));
+        win.style.minHeight = Math.max(compact() ? 0 : 560, reach + 28) + 'px';
+        const W = win.getBoundingClientRect(), R = word.getBoundingClientRect(), PR = phrase.getBoundingClientRect();
+        const y = PR.top - W.top + PR.height / 2;
+        pos = {
+          start: { x: W.width * 0.72, y: Math.min(W.height - 60, R.bottom - W.top + 170) },
+          word: { x: R.left - W.left + R.width * 0.42, y: R.top - W.top + R.height / 2 },
+          selFrom: { x: PR.left - W.left, y },
+          selTo: { x: PR.right - W.left, y },
         };
-        const finalH = compact() ? m.firstB + m.padB + m.sugsH + m.inputH : m.H;
-        win.style.minHeight = Math.max(compact() ? 0 : 560, top + finalH + 28) + 'px';
-        path = cursorPath(win, word, { x: W.width * 0.72, y: Math.min(W.height - 60, top + 170) });
-        beam.style.transform = path.from;
+        // Where each character of the phrase ends, for the selection to snap to.
+        const text = [...phrase.childNodes].find(n => n.nodeType === 3);
+        const range = document.createRange();
+        edges = [0];
+        for (let i = 1; i <= text.length; i++) {
+          range.setStart(text, 0);
+          range.setEnd(text, i);
+          edges.push(range.getBoundingClientRect().width);
+        }
+        beam.style.transform = at(pos.start);
       },
 
       async build(r) {
-        await r.wait(500);
-        r.fade(beam, 1, 250);
-        await r.wait(250);
-        r.anim(beam, [{ transform: path.from }, { transform: path.to }], { duration: 1150, easing: GLIDE });
-        await r.wait(1350);
-
-        // ⌥ Space
-        press(r, optKey, 420);
-        await r.wait(160);
-        press(r, spaceKey, 200);
-        await r.wait(120);
-
-        // The panel opens under the word with a placeholder, then the answer streams in.
-        r.fade(mark, 1, 200);
-        setShape(r, m.skelB, false, 0);
-        r.anim(wrap, [
-          { opacity: 0, transform: 'translateY(-6px) scale(.985)' },
-          { opacity: 1, transform: 'none' },
-        ], { duration: 220 });
-        r.fade(skel, 1, 120);
-        r.cls(input, 'busy');
-        await r.wait(340);
-        r.fade(skel, 0, 100);
-        r.fade($('.p-kind', hero), 1, 220);
-        setShape(r, m.gistB, false, 200);
-        await r.stream(gist, 30);
-        r.fade($('.p-rule', hero), 1, 200);
-        setShape(r, m.firstB, false, 320);
-        const [b1, b2] = $$('.p-bullets li', hero);
-        await r.stream(b1, 15);
-        await r.stream(b2, 15);
-        setShape(r, m.firstB, true, 220);
-        r.anim(sugA, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, delay: 60 });
-        r.cls(input, 'busy', false);
-
-        if (compact()) { await r.wait(4200); return; }
-
-        // ⌘1 asks the first suggestion; the panel grows to hold the follow-up.
-        await r.wait(2200);
-        r.fade(chordA, 0, 200);
-        r.fade(chordB, 1, 200);
-        await r.wait(420);
-        press(r, cmdKey, 420);
-        await r.wait(160);
-        press(r, oneKey, 200);
-        await r.wait(70);
-        r.cls($('li', sugA), 'lit');
-        await r.wait(260);
-        r.cls(input, 'busy');
-        r.fade(sugA, 0, 120);
-        setShape(r, m.followB, false, 420);
-        r.fade($('.p-q', follow), 1, 220, { delay: 120 });
-        await r.wait(420);
-        await r.stream($('.p-gist', follow), 30);
-        r.cls(input, 'busy', false);
-        setShape(r, m.followB, true, 220);
-        r.anim(sugB, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 220, delay: 60 });
-        if (r.instant) { r.fade(chordB, 0); r.fade(chordA, 1); }
-        await r.wait(4200);
+        const from = r.from || 1;
+        if (r.still) {
+          if (from === 1) return point(r);
+          await select(r, false);
+          if (from === 3) await ask(r);
+          return;
+        }
+        if (from === 3) {
+          r.instant = true;
+          await select(r, false);
+          r.instant = false;
+        }
+        if (from === 1) await point(r);
+        if (from <= 2) await select(r, from === 1);
+        await ask(r);
       },
 
       async out(r) {
-        r.fade(wrap, 0, 320);
-        r.fade(mark, 0, 320);
+        r.fade(B.wrap, 0, 320);
         r.fade(beam, 0, 320);
-        if (!compact()) { r.fade(chordB, 0, 300); r.fade(chordA, 1, 300); }
+        r.fade(sel, 0, 320);
+        r.fade(chordB, 0, 300);
+        r.fade(chordA, 1, 300);
         await r.wait(1100);
       },
     };
 
-    const r = new Runner(hero, script);
-    runners.push(r);
+    heroRunner = new Runner(hero, script);
+    runners.push(heroRunner);
+    stepBtns.forEach(b => b.addEventListener('click', () => {
+      heroRunner.start(+b.dataset.step, reduce.matches || userPaused);
+    }));
   }
 
   // ---------- Vignettes ----------
@@ -321,6 +434,19 @@
         r.anim(beam, [{ transform: path.from }, { transform: path.to }], { duration: 950, easing: GLIDE });
         await r.wait(1150);
       },
+      // The little ⌥ Space in the corner goes down: the cursor only points, the keys ask.
+      async press(r) {
+        $$('.vig-keys kbd', box).forEach((k, i) => r.anim(k, [
+          { transform: 'none', color: '', borderColor: '' },
+          { transform: 'translateY(1px)', color: 'var(--accent)', borderColor: 'var(--accent)', offset: .25 },
+          { transform: 'translateY(1px)', color: 'var(--accent)', borderColor: 'var(--accent)', offset: .7 },
+          { transform: 'none', color: '', borderColor: '' },
+        ], { duration: 420, delay: i * 90, fill: 'none', easing: 'ease-out' }));
+        // Then they step aside for the panel.
+        const keys = $('.vig-keys', box);
+        if (keys) r.fade(keys, 0, 300, { delay: 600 });
+        await r.wait(220);
+      },
       open(r) {
         r.anim(panel, [{ opacity: 0, transform: 'translateY(-5px)' }, { opacity: 1, transform: 'none' }], { duration: 220 });
       },
@@ -335,13 +461,14 @@
 
   vignette('v-point', box => {
     const p = pointAndOpen(box);
-    const one = $('.vmark-one', box), all = $('.vmark-all', box);
+    const one = $('.vread-one', box), all = $('.vread-all', box);
     const target = $('.vword', box);
     return {
       layout() { p.layout(target); },
       async build(r) {
         await p.point(r);
-        r.fade(one, 1, 160);
+        await p.press(r);
+        r.anim(one, [{ opacity: 0, transform: 'scaleX(.4)' }, { opacity: 1, transform: 'none' }], { duration: 220 });
         await r.wait(420);
         // From the word you pointed at to the whole term.
         r.fade(one, 0, 260);
@@ -359,13 +486,14 @@
 
   vignette('v-acro', box => {
     const p = pointAndOpen(box);
-    const one = $('.vmark-one', box);
+    const one = $('.vread-one', box);
     const target = $('.vword', box);
     return {
       layout() { p.layout(target); },
       async build(r) {
         await p.point(r);
-        r.fade(one, 1, 160);
+        await p.press(r);
+        r.anim(one, [{ opacity: 0, transform: 'scaleX(.4)' }, { opacity: 1, transform: 'none' }], { duration: 220 });
         await r.wait(160);
         p.open(r);
         await r.wait(520);
@@ -382,14 +510,15 @@
 
   vignette('v-web', box => {
     const p = pointAndOpen(box);
-    const one = $('.vmark-one', box);
+    const one = $('.vread-one', box);
     const target = $('.vword', box);
     const searching = $('.searching', box);
     return {
       layout() { p.layout(target); },
       async build(r) {
         await p.point(r);
-        r.fade(one, 1, 160);
+        await p.press(r);
+        r.anim(one, [{ opacity: 0, transform: 'scaleX(.4)' }, { opacity: 1, transform: 'none' }], { duration: 220 });
         await r.wait(160);
         p.open(r);
         await r.wait(250);
@@ -451,6 +580,8 @@
       toggle.textContent = userPaused ? 'Play' : 'Pause';
       toggle.setAttribute('aria-pressed', String(userPaused));
       runners.forEach(r => r.sync());
+      // A step picked while paused shows its still; carry on from there.
+      if (!userPaused && heroRunner?.still && !reduce.matches) heroRunner.start(heroRunner.from);
     });
   }
   document.addEventListener('visibilitychange', () => runners.forEach(r => r.sync()));
