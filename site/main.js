@@ -238,7 +238,6 @@
         r.fade(skel, 1, 120);
         r.cls(input, 'busy');
         await r.wait(340);
-        r.fade($('.p-ms', hero), 1, 200);
         r.fade(skel, 0, 100);
         r.fade($('.p-kind', hero), 1, 220);
         setShape(r, m.gistB, false, 200);

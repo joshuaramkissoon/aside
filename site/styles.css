@@ -292,7 +292,6 @@ h1 { position: relative; z-index: 0; }
 .p-snip { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 .p-snip b { font-weight: 500; }
 .p-snip strong { font-weight: 600; color: var(--soft); }
-.p-ms { margin-left: auto; padding-left: 8px; font: 10px/1 var(--mono); color: var(--faint); opacity: 0; }
 
 .p-title { display: flex; align-items: baseline; gap: 12px; margin-top: 9px; }
 .p-term { font: 600 26px/1.15 var(--serif); color: var(--ink); letter-spacing: -.005em; }
@@ -468,9 +467,9 @@ h1 { position: relative; z-index: 0; }
 .is-static .ibeam { display: none; }
 .is-static .panel-wrap { opacity: 1; }
 .is-static .word-mark { opacity: 1; }
-.is-static .p-ms, .is-static .p-sug-b { opacity: 1; }
+.is-static .p-sug-b { opacity: 1; }
 html:not(.js) .panel-wrap { position: relative; opacity: 1; margin: 0 0 24px 22px; width: min(448px, calc(100% - 44px)); }
-html:not(.js) .p-ms, html:not(.js) .p-sug-a { opacity: 1; }
+html:not(.js) .p-sug-a { opacity: 1; }
 html:not(.js) .p-follow, html:not(.js) .p-sug-b, html:not(.js) .keys { display: none; }
 html:not(.js) .win { min-height: 0; }
 

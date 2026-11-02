@@ -19,7 +19,6 @@
   .og .doc p { position: relative; z-index: 0; }
   .og .doc .word-mark { opacity: 1; }
   .og .panel-wrap { position: absolute; margin: 0; opacity: 1; left: 106px; top: 72px; width: 448px; }
-  .og .p-ms { opacity: 1; }
 </style>
 </head>
 <body>
@@ -34,7 +33,7 @@
     <div class="panel-wrap">
       <div class="panel" style="clip-path:none">
         <div class="p-body">
-          <div class="p-eyebrow"><span class="p-app"></span><span class="p-snip"><b>Notes</b>&ensp;<i>write vs <strong>flush</strong> vs fsync vs fsyncing the directory</i></span><span class="p-ms">0.34s</span></div>
+          <div class="p-eyebrow"><span class="p-app"></span><span class="p-snip"><b>Notes</b>&ensp;<i>write vs <strong>flush</strong> vs fsync vs fsyncing the directory</i></span></div>
           <div class="p-title"><span class="p-term">flush</span><span class="p-kind">I/O operation</span></div>
           <p class="p-gist">Hands buffered writes to the OS, but does <mark>not guarantee they reach disk</mark>. That’s fsync’s job.</p>
           <span class="p-rule"></span>
