@@ -114,6 +114,19 @@ extension Color {
     }
 }
 
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, look, keys, permissions
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .look: return "Look"
+        case .keys: return "Keys"
+        case .permissions: return "Permissions"
+        }
+    }
+}
+
 /// Observable settings for SwiftUI.
 @MainActor
 final class Settings: ObservableObject {
@@ -122,6 +135,8 @@ final class Settings: ObservableObject {
     @Published var shortcut: Shortcut = Prefs.shortcut { didSet { Prefs.shortcut = shortcut; onShortcutChange?() } }
     @Published var model: String = Prefs.model { didSet { Prefs.model = model } }
     @Published var shortcutFailed = false
+    /// The Settings window's current pane, so the panel can open it at the right place.
+    @Published var pane: SettingsPane = .general
     var onShortcutChange: (() -> Void)?
     var palette: Palette { Palette.named(theme) }
 }

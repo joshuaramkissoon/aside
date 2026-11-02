@@ -22,6 +22,12 @@ if args.contains("--import-key") {
     exit(saved.isEmpty ? 1 : 0)
 }
 
+// `Aside --markdown` prints how the inline parser reads some tricky strings (development).
+if args.contains("--markdown") {
+    DevTools.markdown()
+    exit(0)
+}
+
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
@@ -32,6 +38,9 @@ MainActor.assumeIsolated {
         app.run()
     } else if let i = args.firstIndex(of: "--ask"), i + 1 < args.count {
         DevTools.ask(term: args[i + 1], context: i + 2 < args.count ? args[i + 2] : "")
+        app.run()
+    } else if args.contains("--selftest") {
+        DevTools.selfTest()
         app.run()
     } else if let i = args.firstIndex(of: "--icon") {
         DevTools.icon(to: i + 1 < args.count ? args[i + 1] : "icon.png")

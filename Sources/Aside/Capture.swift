@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import NaturalLanguage
 
 /// What the reader pointed at, and where.
 struct Capture: Equatable {
@@ -31,6 +32,10 @@ struct Capture: Equatable {
     }
 
     var cacheKey: String { "\(term)\u{1}\(context)" }
+
+    /// A selection long enough to be a passage rather than a term: the panel labels it and quotes its opening.
+    var isPassage: Bool { term.count > 80 || term.contains("\n") }
+    var wordCount: Int { term.split(whereSeparator: { $0.isWhitespace }).count }
 
     static func == (a: Capture, b: Capture) -> Bool {
         a.term == b.term && a.context == b.context && a.bundleID == b.bundleID
@@ -73,10 +78,53 @@ enum ContextText {
         return (trimmedText, NSRange(location: max(0, rel.location - lead), length: rel.length))
     }
 
+    /// The longest selection sent as the term. Longer ones are cut at a word and marked with an ellipsis.
+    static let maxTerm = 1200
+
+    /// A selection cut down to `maxTerm` characters at a word boundary.
+    static func capTerm(_ s: String) -> String {
+        guard s.count > maxTerm else { return s }
+        let cut = s.prefix(maxTerm)
+        let atWord = cut.lastIndex(where: { $0.isWhitespace }).map { cut[..<$0] } ?? cut
+        return atWord.trimmingCharacters(in: .whitespacesAndNewlines) + " …"
+    }
+
+    /// Scripts written without spaces between words, where the alphanumeric rule would grab a whole clause.
+    static func isUnspacedScript(_ s: Unicode.Scalar) -> Bool {
+        if s.properties.isIdeographic { return true }
+        switch s.value {
+        case 0x3040...0x30FF, 0x31F0...0x31FF, 0xFF66...0xFF9F: return true // kana
+        case 0x0E00...0x0EFF: return true                                 // Thai, Lao
+        case 0x1000...0x109F, 0x1780...0x17FF: return true                // Myanmar, Khmer
+        default: return false
+        }
+    }
+
+    /// The word at a UTF-16 offset in Chinese, Japanese, Thai and the like, found with NLTokenizer.
+    static func tokenizedWord(in text: String, at offset: Int) -> (String, NSRange)? {
+        let ns = text as NSString
+        // Tokenise just the line around the pointer: fast, and enough context for the segmenter.
+        let line = ns.lineRange(for: NSRange(location: offset, length: 0))
+        let lineText = ns.substring(with: line)
+        let tok = NLTokenizer(unit: .word)
+        tok.string = lineText
+        let rel = offset - line.location
+        guard let idx = Range(NSRange(location: rel, length: 0), in: lineText)?.lowerBound else { return nil }
+        let r = tok.tokenRange(at: idx)
+        guard !r.isEmpty else { return nil }
+        let nr = NSRange(r, in: lineText)
+        let word = String(lineText[r]).trimmed
+        guard !word.isEmpty else { return nil }
+        return (word, NSRange(location: nr.location + line.location, length: nr.length))
+    }
+
     /// The word at a UTF-16 offset: letters, digits and joiners like - _ ' and inner dots.
     static func word(in text: String, at offset: Int) -> (String, NSRange)? {
         let ns = text as NSString
         guard offset >= 0, offset < ns.length else { return nil }
+        if let s = Unicode.Scalar(ns.character(at: offset)), isUnspacedScript(s) {
+            return tokenizedWord(in: text, at: offset)
+        }
         func isWordChar(_ i: Int) -> Bool {
             guard i >= 0, i < ns.length else { return false }
             let c = ns.character(at: i)
@@ -135,8 +183,20 @@ enum ContextText {
         let room = max(0, maxLen - r.length) / 2
         let lineStart = ns.lineRange(for: NSRange(location: r.location, length: 0)).location
         let lineEnd = NSMaxRange(ns.lineRange(for: NSRange(location: max(r.location, NSMaxRange(r) - 1), length: 0)))
-        let s = max(lineStart, r.location - room)
-        let e = min(lineEnd, NSMaxRange(r) + room)
+        var s = max(lineStart, r.location - room)
+        var e = min(lineEnd, NSMaxRange(r) + room)
+        // Cut at whole words, so the excerpt never starts or ends mid-word.
+        func isSpace(_ i: Int) -> Bool { i >= 0 && i < ns.length && (Unicode.Scalar(ns.character(at: i)).map { CharacterSet.whitespacesAndNewlines.contains($0) } ?? false) }
+        if s > lineStart, !isSpace(s - 1) {
+            var i = s
+            while i < r.location, !isSpace(i) { i += 1 }
+            if i < r.location { s = i + 1 }
+        }
+        if e < lineEnd, !isSpace(e) {
+            var i = e
+            while i > NSMaxRange(r), !isSpace(i - 1) { i -= 1 }
+            if i > NSMaxRange(r) { e = i - 1 }
+        }
         let before = ns.substring(with: NSRange(location: s, length: r.location - s))
         let after = ns.substring(with: NSRange(location: NSMaxRange(r), length: max(0, e - NSMaxRange(r))))
         let clean: (String) -> String = { $0.replacingOccurrences(of: "\n", with: " ") }
@@ -164,11 +224,33 @@ final class Capturer {
 
     enum Selection { case found(Capture), empty, unknown }
 
+    /// Why the last capture found nothing, so the panel can say something useful.
+    enum Miss: Equatable { case nothing, secureField, slow(String) }
+    private(set) var miss: Miss = .nothing
+
     func capture() async -> Capture? {
         let t0 = CFAbsoluteTimeGetCurrent()
+        miss = .nothing
         let forced = forcedBundleID.flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first }
         guard let app = forced ?? NSWorkspace.shared.frontmostApplication else { return nil }
         let pid = app.processIdentifier
+
+        func done(_ c: Capture) -> Capture? {
+            var c = ContextText.clean(c)
+            c.term = ContextText.capTerm(c.term.replacingOccurrences(of: "\u{FFFC}", with: "").trimmed)
+            c.captureMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+            return c.term.isEmpty ? nil : c
+        }
+
+        // Aside's own windows (onboarding's try-it text): Accessibility calls into our own process would
+        // block on the main thread we're running on, so read our text views directly.
+        if forced == nil, pid == ProcessInfo.processInfo.processIdentifier {
+            var base = Capture()
+            base.appName = "Aside"
+            base.bundleID = Bundle.main.bundleIdentifier ?? "com.jkmr.aside"
+            return ownCapture(base).flatMap(done)
+        }
+
         let appEl = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(appEl, 0.35)
         prime(appEl, pid: pid, bundleID: app.bundleIdentifier ?? "")
@@ -180,19 +262,17 @@ final class Capturer {
             base.windowTitle = AX.string(win, kAXTitleAttribute) ?? ""
         }
         let mouse = AX.mouseLocation()
-
-        func done(_ c: Capture) -> Capture {
-            var c = ContextText.clean(c)
-            c.term = c.term.trimmed
-            c.captureMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
-            return c
+        defer {
+            // An app that let its Accessibility calls run to the timeout is busy or hung.
+            if miss == .nothing, CFAbsoluteTimeGetCurrent() - t0 > 1.0 { miss = .slow(base.appName) }
         }
 
-        // 1. A selection the app reports through Accessibility.
+        // 1. A selection the app reports through Accessibility. Never read a password field.
         var axSaysEmpty = false
         if let focused = AX.element(appEl, kAXFocusedUIElementAttribute) {
+            if AX.isSecure(focused) { miss = .secureField; return nil }
             switch selection(in: focused, base) {
-            case .found(let c): return done(await enrich(c, near: mouse))
+            case .found(let c): if let c = done(await enrich(c, near: mouse)) { return c }
             case .empty: axSaysEmpty = true
             case .unknown: break
             }
@@ -203,12 +283,61 @@ final class Capturer {
             var c = base
             c.term = text
             c.source = .clipboard
-            return done(await enrich(c, near: mouse))
+            if let c = done(await enrich(c, near: mouse)) { return c }
         }
 
         // 3. Nothing selected: the word under the pointer.
         if let c = pointer(at: mouse, base) { return done(c) }
+        if miss == .secureField { return nil }
         if let c = await ocr.pointer(at: mouse, base) { return done(c) }
+        return nil
+    }
+
+    // MARK: Aside's own windows
+
+    /// The selection, or the word under the pointer, in one of Aside's own text views.
+    func ownCapture(_ base: Capture, at point: CGPoint? = nil) -> Capture? {
+        let mouse = point ?? NSEvent.mouseLocation
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        func axRect(_ r: NSRect) -> CGRect { CGRect(x: r.minX, y: primaryHeight - r.maxY, width: r.width, height: r.height) }
+        func usable(_ tv: NSTextView) -> Bool {
+            !(tv.delegate is NSSecureTextField) && !String(describing: type(of: tv)).contains("Secure")
+        }
+        func make(_ tv: NSTextView, _ range: NSRange, term: String, source: Capture.Source) -> Capture {
+            var c = base
+            c.windowTitle = tv.window?.title ?? ""
+            c.term = term
+            c.source = source
+            let (ctx, rel) = ContextText.window(tv.string, range)
+            c.context = ctx
+            c.termRange = rel
+            c.anchor = axRect(tv.firstRect(forCharacterRange: range, actualRange: nil))
+            return c
+        }
+        func selected(_ tv: NSTextView) -> Capture? {
+            let r = tv.selectedRange()
+            guard r.length > 0, NSMaxRange(r) <= (tv.string as NSString).length else { return nil }
+            let t = (tv.string as NSString).substring(with: r).trimmed
+            return t.isEmpty ? nil : make(tv, r, term: t, source: .selection)
+        }
+
+        // A selection in the focused text view.
+        if let tv = NSApp.keyWindow?.firstResponder as? NSTextView, usable(tv), let c = selected(tv) { return c }
+        // Otherwise the word under the pointer.
+        for w in NSApp.orderedWindows where w.isVisible && w.frame.contains(mouse) && !(w is LookupPanel) {
+            guard let content = w.contentView else { continue }
+            // hitTest takes a point in the view's superview's coordinates.
+            let wp = w.convertPoint(fromScreen: mouse)
+            var v = content.hitTest(content.superview?.convert(wp, from: nil) ?? wp)
+            while let cur = v, !(cur is NSTextView) { v = cur.superview }
+            guard let tv = v as? NSTextView, usable(tv) else { return nil }
+            if let c = selected(tv) { return c }
+            let i = tv.characterIndex(for: mouse)
+            guard i != NSNotFound, i < (tv.string as NSString).length,
+                  tv.firstRect(forCharacterRange: NSRange(location: i, length: 1), actualRange: nil).insetBy(dx: -3, dy: -4).contains(mouse),
+                  let (word, wr) = ContextText.word(in: tv.string, at: i) else { return nil }
+            return make(tv, wr, term: word, source: .pointer)
+        }
         return nil
     }
 
@@ -340,6 +469,7 @@ final class Capturer {
         AXUIElementSetMessagingTimeout(sys, 0.3)
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(sys, Float(p.x), Float(p.y), &hit) == .success, let el = hit else { return nil }
+        if AX.isSecure(el) { miss = .secureField; return nil }
 
         if let wa = AX.webArea(from: el), let (m, wordBounds) = webMarker(wa, el, at: p),
            let para = AX.param(wa, "AXParagraphTextMarkerRangeForTextMarker", m),

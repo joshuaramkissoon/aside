@@ -2,35 +2,38 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var status: NSStatusItem!
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private var status: NSStatusItem?
     let panel = PanelController()
     private var hotkey: HotKey?
     private var settingsWindow: NSWindow?
+    private var onboardingWindow: NSWindow?
+    private var aboutWindow: NSWindow?
+    private var onboarding: Onboarding?
     private var flagsMonitor: Any?
-    private var lookupItem: NSMenuItem!
+    private let lookupItem = NSMenuItem(title: "Look Up", action: #selector(lookUp), keyEquivalent: "")
+    private let pauseItem = NSMenuItem(title: "Pause Aside", action: #selector(togglePause), keyEquivalent: "")
+    private var paused = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let b = status.button {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let b = item.button {
             let img = NSImage(systemSymbolName: "text.magnifyingglass", accessibilityDescription: "Aside")
             img?.isTemplate = true
             b.image = img
+            b.setAccessibilityLabel("Aside")
         }
-        let menu = NSMenu()
-        lookupItem = NSMenuItem(title: "Look Up  \(Prefs.shortcut.label)", action: #selector(lookUp), keyEquivalent: "")
-        lookupItem.target = self
-        menu.addItem(lookupItem)
-        menu.addItem(.separator())
-        let settings = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
-        settings.target = self
-        menu.addItem(settings)
-        menu.addItem(NSMenuItem(title: "Quit Aside", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        status.menu = menu
+        item.menu = buildMenu()
+        status = item
 
         registerHotkey()
         Settings.shared.onShortcutChange = { [weak self] in self?.registerHotkey() }
         panel.openSettings = { [weak self] in self?.showSettings() }
+        panel.onLookup = { [weak self] cap in
+            // The try-it step watches for a look-up made from its own sample text.
+            guard let o = self?.onboarding, o.step == .tryIt, cap.appName == "Aside" else { return }
+            o.triedIt = true
+        }
 
         Engine.shared.prewarm(force: true)
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
@@ -52,38 +55,110 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.panel.trigger() }
         }
 
-        if !Prefs.onboarded || KeyStore.apiKey == nil || !AXIsProcessTrusted() {
-            Prefs.onboarded = true
-            showSettings()
+        if !Prefs.onboarded {
+            showOnboarding(at: nil)
+        } else if KeyStore.apiKey == nil || !AXIsProcessTrusted() {
+            showOnboarding(at: Onboarding.firstIncomplete())
         }
+    }
+
+    private func buildMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.delegate = self
+        lookupItem.target = self
+        menu.addItem(lookupItem)
+        menu.addItem(.separator())
+        let settings = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+        pauseItem.target = self
+        menu.addItem(pauseItem)
+        menu.addItem(.separator())
+        let about = NSMenuItem(title: "About Aside", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+        menu.addItem(NSMenuItem(title: "Quit Aside", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        return menu
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        lookupItem.title = "Look Up"
+        lookupItem.isEnabled = !paused
+        // Show the shortcut the way menus do, right-aligned.
+        let s = Prefs.shortcut
+        lookupItem.keyEquivalent = s == .optionL ? "l" : (s == .optionSlash ? "/" : " ")
+        lookupItem.keyEquivalentModifierMask = s == .controlSpace ? [.control] : [.option]
+        pauseItem.title = paused ? "Resume Aside" : "Pause Aside"
+        pauseItem.state = .off
     }
 
     func registerHotkey() {
         hotkey = nil
+        guard !paused else { return }
         let s = Prefs.shortcut
         hotkey = HotKey(keyCode: s.keyCode, modifiers: s.modifiers) { [weak self] in
             MainActor.assumeIsolated { self?.panel.trigger() }
         }
         Settings.shared.shortcutFailed = hotkey == nil
-        lookupItem?.title = "Look Up  \(s.label)"
     }
 
     @objc func lookUp() { panel.trigger() }
 
+    /// Pausing unregisters the shortcut, so ⌥ Space goes back to whatever else wants it.
+    @objc func togglePause() {
+        paused.toggle()
+        if paused { panel.close() }
+        registerHotkey()
+        status?.button?.appearsDisabled = paused
+        status?.button?.setAccessibilityLabel(paused ? "Aside, paused" : "Aside")
+    }
+
     @objc func showSettings() {
         if settingsWindow == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 660),
-                             styleMask: [.titled, .closable, .fullSizeContentView],
-                             backing: .buffered, defer: false)
-            w.titlebarAppearsTransparent = true
-            w.titleVisibility = .hidden
-            w.isMovableByWindowBackground = true
-            w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: SettingsView())
-            w.center()
-            settingsWindow = w
+            settingsWindow = makeWindow(title: "Aside Settings", size: SettingsView.size, view: SettingsView())
         }
+        bringForward(settingsWindow)
+    }
+
+    @objc func showAbout() {
+        if aboutWindow == nil {
+            aboutWindow = makeWindow(title: "About Aside", size: CGSize(width: 320, height: 330), view: AboutView())
+        }
+        bringForward(aboutWindow)
+    }
+
+    func showOnboarding(at step: Onboarding.Step?) {
+        let model = Onboarding(start: step)
+        model.onFinish = { [weak self] in
+            self?.onboardingWindow?.close()
+            self?.onboardingWindow = nil
+            self?.onboarding = nil
+        }
+        onboarding = model
+        let w = makeWindow(title: "Welcome to Aside", size: OnboardingView.size, view: OnboardingView(model: model))
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
+            MainActor.assumeIsolated { model.stopPolling() }
+        }
+        onboardingWindow = w
+        bringForward(w)
+    }
+
+    private func makeWindow<V: View>(title: String, size: CGSize, view: V) -> NSWindow {
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                         styleMask: [.titled, .closable, .fullSizeContentView],
+                         backing: .buffered, defer: false)
+        w.title = title
+        w.titlebarAppearsTransparent = true
+        w.titleVisibility = .hidden
+        w.isMovableByWindowBackground = true
+        w.isReleasedWhenClosed = false
+        w.contentView = NSHostingView(rootView: view)
+        w.center()
+        return w
+    }
+
+    private func bringForward(_ w: NSWindow?) {
         NSApp.activate(ignoringOtherApps: true)
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        w?.makeKeyAndOrderFront(nil)
     }
 }

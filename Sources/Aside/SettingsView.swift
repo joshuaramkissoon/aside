@@ -2,167 +2,218 @@ import AppKit
 import ServiceManagement
 import SwiftUI
 
+/// Preferences, in four panes under a small masthead.
 struct SettingsView: View {
     @ObservedObject var settings = Settings.shared
     @Environment(\.colorScheme) private var scheme
-    @State private var keyDraft = ""
-    @State private var hasKey = KeyStore.apiKey != nil
-    @State private var testResult: String? = nil
-    @State private var testing = false
-    @State private var axOK = AXIsProcessTrusted()
-    @State private var screenOK = CGPreflightScreenCaptureAccess()
-    @State private var loginOn = SMAppService.mainApp.status == .enabled
-    private let poll = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    static let size = CGSize(width: 560, height: 540)
 
     var body: some View {
         let c = settings.palette.swatch(scheme)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                hero(c)
-                section("Shortcut", c) {
-                    HStack(spacing: 8) {
-                        ForEach(Shortcut.allCases) { s in
-                            Chip(title: s.label, on: settings.shortcut == s, c: c) { settings.shortcut = s }
-                        }
-                    }
-                    if settings.shortcutFailed {
-                        note("Another app already uses \(settings.shortcut.label). Pick a different one.", c, warn: true)
-                    } else {
-                        note("Select text, or just point at a word, and press it. Press it again to close.", c)
-                    }
-                }
-                section("Look", c) {
-                    HStack(spacing: 12) {
-                        ForEach(Palette.all) { p in
-                            PaletteCard(palette: p, on: settings.theme == p.id) { settings.theme = p.id }
-                        }
-                    }
-                    note(settings.palette.note + " Follows your Mac's light or dark mode.", c)
-                }
-                section("Together API key", c) {
-                    HStack(spacing: 8) {
-                        SecureField(hasKey ? "Saved on this Mac" : "Paste your key", text: $keyDraft)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 13, design: .monospaced))
-                            .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(RoundedRectangle(cornerRadius: 7).fill(c.codeBg))
-                            .onSubmit(saveKey)
-                        if !keyDraft.isEmpty {
-                            PillButton(title: "Save", c: c, action: saveKey)
-                        } else if hasKey {
-                            PillButton(title: testing ? "Testing…" : "Test", c: c, action: test)
-                        }
-                    }
-                    if let testResult { note(testResult, c) }
-                    else { note("Answers come from \(settings.model.split(separator: "/").last.map(String.init) ?? settings.model) on Together, with thinking off for speed. Only the text you look up and the words around it are sent.", c) }
-                }
-                section("Permissions", c) {
-                    PermissionRow(title: "Accessibility", detail: "Required. Reads the text you select or point at.", ok: axOK, c: c) {
-                        Permissions.promptAccessibility()
-                        Permissions.openAccessibility()
-                    }
-                    PermissionRow(title: "Screen Recording", detail: "Optional. Reads text from apps that hide it, like some terminals.", ok: screenOK, c: c) {
-                        CGRequestScreenCaptureAccess()
-                        Permissions.openScreenRecording()
-                    }
-                }
-                section("General", c) {
-                    Toggle(isOn: $loginOn) {
-                        Text("Open Aside when you log in").font(.system(size: 13)).foregroundStyle(c.ink)
-                    }
-                    .toggleStyle(.switch)
-                    .tint(c.accent)
-                    .onChange(of: loginOn) { _, on in
-                        do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
-                        catch { loginOn = SMAppService.mainApp.status == .enabled }
-                    }
-                }
-                HStack {
-                    Text("Esc closes · ⌘1–3 asks a suggestion · ↓ picks one · ⌘C copies · ⌘P pins")
-                        .font(.system(size: 11))
-                        .foregroundStyle(c.faint)
-                    Spacer()
-                    Button("Quit Aside") { NSApp.terminate(nil) }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(c.faint)
+        VStack(alignment: .leading, spacing: 0) {
+            masthead(c)
+            Group {
+                switch settings.pane {
+                case .general: GeneralPane(c: c)
+                case .look: LookPane(c: c)
+                case .keys: KeysPane(c: c)
+                case .permissions: PermissionsPane(c: c)
                 }
             }
             .padding(.horizontal, 36)
-            .padding(.top, 44)
-            .padding(.bottom, 26)
+            .padding(.top, 24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            footer(c)
         }
-        .frame(width: 540, height: 660)
+        .frame(width: Self.size.width, height: Self.size.height)
         .background(c.card)
-        .onReceive(poll) { _ in
-            axOK = AXIsProcessTrusted()
-            screenOK = CGPreflightScreenCaptureAccess()
-        }
     }
 
-    private func hero(_ c: Swatch) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func masthead(_ c: Swatch) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text("Aside").font(.system(size: 34, weight: .semibold, design: .serif)).foregroundStyle(c.ink)
-                Text(".").font(.system(size: 34, weight: .semibold, design: .serif)).foregroundStyle(c.accent)
+                Text("Aside").font(.system(size: 26, weight: .semibold, design: .serif)).foregroundStyle(c.ink)
+                Text(".").font(.system(size: 26, weight: .semibold, design: .serif)).foregroundStyle(c.accent)
+                Spacer()
+                ShortcutKeys(label: settings.shortcut.label, c: c, size: 11)
             }
-            Text(Rich.attributed("Point at anything on your Mac and see what it ==means right there==, then keep asking.",
-                                 size: 16, serif: true, base: c.soft, strong: c.ink, c: c))
-                .lineSpacing(3)
-            HStack(spacing: 6) {
-                ForEach(settings.shortcut.label.split(separator: " ").map(String.init), id: \.self) { k in
-                    Text(k)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(c.ink)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(c.codeBg))
-                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(c.line, lineWidth: 1))
+            HStack(spacing: 22) {
+                ForEach(SettingsPane.allCases) { p in
+                    PaneTab(title: p.title, on: settings.pane == p, c: c) { settings.pane = p }
                 }
             }
-            .padding(.top, 4)
         }
+        .padding(.horizontal, 36)
+        .padding(.top, 40)
+        .overlay(alignment: .bottom) { Rectangle().fill(c.line).frame(height: 0.5) }
     }
 
-    private func section<Content: View>(_ title: String, _ c: Swatch, @ViewBuilder _ content: () -> Content) -> some View {
+    private func footer(_ c: Swatch) -> some View {
+        HStack {
+            Text(AboutView.version)
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(c.faint)
+            Spacer()
+            Button("Quit Aside") { NSApp.terminate(nil) }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(c.faint)
+        }
+        .padding(.horizontal, 36)
+        .padding(.vertical, 16)
+    }
+}
+
+/// A text tab with the rubric rule under the current one.
+struct PaneTab: View {
+    let title: String
+    let on: Bool
+    let c: Swatch
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: on ? .semibold : .regular))
+                .foregroundStyle(on ? c.ink : (hover ? c.soft : c.faint))
+                .padding(.bottom, 10)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(on ? c.accent : .clear).frame(height: 2)
+                }
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .accessibilityAddTraits(on ? [.isSelected] : [])
+    }
+}
+
+struct SettingsSection<Content: View>: View {
+    let title: String
+    let c: Swatch
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title.uppercased())
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(1.3)
                 .foregroundStyle(c.accent)
+                .accessibilityAddTraits(.isHeader)
             content()
         }
     }
+}
 
-    private func note(_ text: String, _ c: Swatch, warn: Bool = false) -> some View {
+struct Note: View {
+    let text: String
+    let c: Swatch
+    var warn = false
+    var body: some View {
         Text(text)
             .font(.system(size: 12))
             .foregroundStyle(warn ? c.accent : c.faint)
             .fixedSize(horizontal: false, vertical: true)
     }
+}
 
-    private func saveKey() {
-        guard let k = keyDraft.nonEmpty else { return }
-        KeyStore.save(k)
-        keyDraft = ""
-        hasKey = true
-        test()
-    }
+private struct GeneralPane: View {
+    @ObservedObject var settings = Settings.shared
+    let c: Swatch
+    @State private var loginOn = SMAppService.mainApp.status == .enabled
 
-    private func test() {
-        testing = true
-        testResult = nil
-        let t0 = CFAbsoluteTimeGetCurrent()
-        Task { @MainActor in
-            var first: Double?
-            do {
-                for try await _ in Engine.shared.stream([["role": "user", "content": "Say ok."]], maxTokens: 3) {
-                    if first == nil { first = CFAbsoluteTimeGetCurrent() - t0 }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            SettingsSection(title: "Shortcut", c: c) {
+                HStack(spacing: 8) {
+                    ForEach(Shortcut.allCases) { s in
+                        Chip(title: s.label, on: settings.shortcut == s, c: c) { settings.shortcut = s }
+                    }
                 }
-                testResult = String(format: "Working. First word in %.2fs.", first ?? 0)
-            } catch {
-                testResult = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                if settings.shortcutFailed {
+                    Note(text: "Another app already uses \(settings.shortcut.label). Pick a different one.", c: c, warn: true)
+                } else {
+                    Note(text: "Select text, or just point at a word, and press it. Press it again to close.", c: c)
+                }
             }
-            testing = false
+            SettingsSection(title: "In the panel", c: c) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ShortcutRow(keys: "esc", text: "closes it", c: c)
+                    ShortcutRow(keys: "⌘1  ⌘2  ⌘3", text: "ask a suggested follow-up (or ↓ then Return)", c: c)
+                    ShortcutRow(keys: "⌘C", text: "copies the answer", c: c)
+                    ShortcutRow(keys: "⌘P", text: "pins it open", c: c)
+                    ShortcutRow(keys: "⌘R", text: "tries again after an error", c: c)
+                }
+            }
+            SettingsSection(title: "Startup", c: c) {
+                Toggle(isOn: $loginOn) {
+                    Text("Open Aside when you log in").font(.system(size: 13)).foregroundStyle(c.ink)
+                }
+                .toggleStyle(.switch)
+                .tint(c.accent)
+                .onChange(of: loginOn) { _, on in
+                    do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
+                    catch { loginOn = SMAppService.mainApp.status == .enabled }
+                }
+            }
+        }
+    }
+}
+
+private struct LookPane: View {
+    @ObservedObject var settings = Settings.shared
+    let c: Swatch
+    var body: some View {
+        SettingsSection(title: "Palette", c: c) {
+            HStack(spacing: 12) {
+                ForEach(Palette.all) { p in
+                    PaletteCard(palette: p, on: settings.theme == p.id) { settings.theme = p.id }
+                }
+            }
+            Note(text: settings.palette.note + " Follows your Mac's light or dark mode.", c: c)
+        }
+    }
+}
+
+private struct KeysPane: View {
+    @ObservedObject var settings = Settings.shared
+    let c: Swatch
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            KeyField(name: .together, title: "Together API key", link: ("Get a key at api.together.ai", "https://api.together.ai/settings/api-keys"),
+                     testable: true, c: c)
+            Note(text: "Answers come from \(settings.model.split(separator: "/").last.map(String.init) ?? settings.model) on Together, with thinking off for speed. Only the text you look up and the words around it are sent.", c: c)
+            KeyField(name: .gemini, title: "Gemini API key, optional",
+                     link: ("For things the model hasn't heard of: Aside checks the web first. Get one at aistudio.google.com", "https://aistudio.google.com/apikey"),
+                     testable: false, c: c)
+            Note(text: "Keys are kept in ~/Library/Application Support/Aside, readable only by you.", c: c)
+        }
+    }
+}
+
+private struct PermissionsPane: View {
+    let c: Swatch
+    @State private var axOK = AXIsProcessTrusted()
+    @State private var screenOK = CGPreflightScreenCaptureAccess()
+    private let poll = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            PermissionRow(title: "Accessibility", detail: "Required. Reads the text you select or point at.", ok: axOK, c: c) {
+                Permissions.promptAccessibility()
+                Permissions.openAccessibility()
+            }
+            PermissionRow(title: "Screen Recording", detail: "Optional. Reads text from apps that hide it, like some terminals.", ok: screenOK, c: c) {
+                CGRequestScreenCaptureAccess()
+                Permissions.openScreenRecording()
+            }
+            Note(text: "Aside never reads password fields, and only reads anything when you press the shortcut.", c: c)
+                .padding(.top, 6)
+        }
+        .onReceive(poll) { _ in
+            axOK = AXIsProcessTrusted()
+            screenOK = CGPreflightScreenCaptureAccess()
         }
     }
 }
@@ -181,6 +232,7 @@ struct Chip: View {
                 .background(Capsule().fill(on ? c.accent : c.codeBg))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 }
 
@@ -215,6 +267,8 @@ struct PaletteCard: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(palette.name) palette")
+        .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 }
 
@@ -230,9 +284,10 @@ struct PermissionRow: View {
             Image(systemName: ok ? "checkmark.circle.fill" : "circle.dashed")
                 .font(.system(size: 15))
                 .foregroundStyle(ok ? c.accent : c.faint)
+                .accessibilityLabel(ok ? "Allowed" : "Not allowed")
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(c.ink)
-                Text(detail).font(.system(size: 11.5)).foregroundStyle(c.faint)
+                Text(detail).font(.system(size: 11.5)).foregroundStyle(c.faint).fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             if !ok { PillButton(title: "Allow", c: c, action: action) }
