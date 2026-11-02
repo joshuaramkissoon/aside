@@ -296,8 +296,8 @@ final class Capturer {
     // MARK: Aside's own windows
 
     /// The selection, or the word under the pointer, in one of Aside's own text views.
-    private func ownCapture(_ base: Capture) -> Capture? {
-        let mouse = NSEvent.mouseLocation
+    func ownCapture(_ base: Capture, at point: CGPoint? = nil) -> Capture? {
+        let mouse = point ?? NSEvent.mouseLocation
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         func axRect(_ r: NSRect) -> CGRect { CGRect(x: r.minX, y: primaryHeight - r.maxY, width: r.width, height: r.height) }
         func usable(_ tv: NSTextView) -> Bool {
@@ -326,7 +326,9 @@ final class Capturer {
         // Otherwise the word under the pointer.
         for w in NSApp.orderedWindows where w.isVisible && w.frame.contains(mouse) && !(w is LookupPanel) {
             guard let content = w.contentView else { continue }
-            var v = content.hitTest(content.convert(w.convertPoint(fromScreen: mouse), from: nil))
+            // hitTest takes a point in the view's superview's coordinates.
+            let wp = w.convertPoint(fromScreen: mouse)
+            var v = content.hitTest(content.superview?.convert(wp, from: nil) ?? wp)
             while let cur = v, !(cur is NSTextView) { v = cur.superview }
             guard let tv = v as? NSTextView, usable(tv) else { return nil }
             if let c = selected(tv) { return c }

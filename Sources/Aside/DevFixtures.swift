@@ -3,6 +3,55 @@ import SwiftUI
 
 /// Edge-case fixtures and window screenshots for `Aside --shots`.
 extension DevTools {
+    /// `Aside --selftest`: capture from Aside's own try-it text (selection and pointer), plus word segmentation.
+    static func selfTest() {
+        Task { @MainActor in
+            for (s, i) in [("東京都に住んでいます", 1), ("我喜欢学习中文和历史", 4), ("ภาษาไทยไม่มีช่องว่าง", 2), ("write-ahead log", 3)] {
+                let w = ContextText.word(in: s, at: i)
+                print("word(\(s), \(i)) =", w?.0 ?? "nil")
+            }
+            print("capTerm 3000 chars →", ContextText.capTerm(String(repeating: "lorem ipsum ", count: 250)).count, "chars")
+
+            let model = Onboarding(start: .tryIt)
+            model.polls = false
+            let w = NSWindow(contentRect: NSRect(x: 200, y: 200, width: OnboardingView.size.width, height: OnboardingView.size.height),
+                             styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
+            w.title = "Welcome to Aside"
+            w.contentView = NSHostingView(rootView: OnboardingView(model: model))
+            NSApp.activate(ignoringOtherApps: true)
+            w.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(600))
+            func find(_ v: NSView) -> NSTextView? {
+                if let t = v as? NSTextView { return t }
+                for s in v.subviews { if let t = find(s) { return t } }
+                return nil
+            }
+            guard let content = w.contentView, let tv = find(content) else { print("no text view"); exit(1) }
+            let ns = tv.string as NSString
+            let capturer = Capturer()
+            var base = Capture()
+            base.appName = "Aside"
+
+            // Pointer: the middle of "MVCC", no selection.
+            let r = ns.range(of: "MVCC")
+            let rect = tv.firstRect(forCharacterRange: NSRange(location: r.location + 1, length: 1), actualRange: nil)
+            let p = CGPoint(x: rect.midX, y: rect.midY)
+            let byPointer = capturer.ownCapture(base, at: p)
+            print("pointer →", byPointer?.term ?? "nil", "| source", byPointer?.source.rawValue ?? "-", "| window", byPointer?.windowTitle ?? "-")
+
+            // Selection: "write-ahead log", through the real capture() entry point (frontmost app is us).
+            w.makeFirstResponder(tv)
+            tv.setSelectedRange(ns.range(of: "write-ahead log"))
+            let front = NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+            print("frontmost is Aside:", front)
+            // Only go through capture() when we really are in front: otherwise it would read (and ⌘C) another app.
+            let bySel = front ? await capturer.capture() : capturer.ownCapture(base, at: p)
+            print("selection →", bySel?.term ?? "nil", "| context has term:", bySel.map { $0.markedContext.contains("⟦write-ahead log⟧") } ?? false,
+                  "| ms", Int(bySel?.captureMs ?? -1))
+            exit(0)
+        }
+    }
+
     static func shoot<V: View>(_ view: V, size: CGSize, to path: String, look: String) async {
         let screen = NSScreen.screens.first?.frame ?? .zero
         let w = NSWindow(contentRect: NSRect(x: 80, y: screen.height - size.height - 100, width: size.width, height: size.height),
@@ -22,8 +71,32 @@ extension DevTools {
         let env = ProcessInfo.processInfo.environment
         if env["SETTINGS"] != nil {
             for look in looks {
-                await shoot(SettingsView(), size: CGSize(width: 540, height: 660), to: "\(dir)/settings-\(look).png", look: look)
+                for pane in SettingsPane.allCases {
+                    Settings.shared.pane = pane
+                    await shoot(SettingsView(), size: SettingsView.size, to: "\(dir)/settings-\(pane.rawValue)-\(look).png", look: look)
+                }
+                await shoot(AboutView(), size: CGSize(width: 320, height: 330), to: "\(dir)/about-\(look).png", look: look)
             }
+            Settings.shared.pane = .general
+        }
+        // ONBOARD=1 for every step, or a list like ONBOARD=accessibility,tryIt.
+        if let o = env["ONBOARD"] {
+            let steps = Onboarding.Step.allCases.filter { o == "1" || o.split(separator: ",").contains(Substring(String(describing: $0))) }
+            let saved = UserDefaults.standard.object(forKey: "onboardingStep")
+            for look in looks {
+                for step in steps {
+                    let model = Onboarding(start: step)
+                    model.polls = false
+                    if step == .tryIt { model.triedIt = env["TRIED"] != nil }
+                    if env["NOAX"] != nil { model.axOK = false; model.screenOK = false }
+                    await shoot(OnboardingView(model: model), size: OnboardingView.size,
+                                to: "\(dir)/onboard-\(step.rawValue)-\(String(describing: step))-\(look).png", look: look)
+                    model.stopPolling()
+                }
+            }
+            // Shots mustn't move a real setup along.
+            if let saved { UserDefaults.standard.set(saved, forKey: "onboardingStep") }
+            else { UserDefaults.standard.removeObject(forKey: "onboardingStep") }
         }
     }
 }
