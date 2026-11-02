@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var paused = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        Updater.shared.start()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let b = item.button {
             let img = NSImage(systemSymbolName: "text.magnifyingglass", accessibilityDescription: "Aside")
@@ -77,6 +78,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let about = NSMenuItem(title: "About Aside", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)
+        if Updater.enabled {
+            let update = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+            update.target = self
+            menu.addItem(update)
+        }
         menu.addItem(NSMenuItem(title: "Quit Aside", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }
@@ -119,6 +125,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         bringForward(settingsWindow)
     }
+
+    @objc func checkForUpdates() { Updater.shared.checkForUpdates() }
 
     @objc func showAbout() {
         if aboutWindow == nil {

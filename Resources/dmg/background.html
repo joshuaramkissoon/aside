@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- The Aside installer window (660×420). Rendered to background.tiff by scripts/make_dmg_background.sh.
+     Finder draws the real icons on top at (170, 214) and (490, 214), and their names in black, so this stays light. -->
+<html><head><meta charset="utf-8">
+<style>
+  @font-face { font-family: Newsreader; src: url(../../site/fonts/newsreader-roman.woff2) format("woff2"); font-style: normal; font-weight: 200 800; }
+  @font-face { font-family: Newsreader; src: url(../../site/fonts/newsreader-italic.woff2) format("woff2"); font-style: italic; font-weight: 200 800; }
+  :root { --paper:#FBF7EF; --paper2:#F4EDE0; --ink:#26221C; --soft:#5E5548; --faint:#9C917E; --rubric:#A8352A; --mark:#F2D6CA; --line:#E6DCCA; }
+  * { margin:0; box-sizing:border-box; }
+  html, body { width:660px; height:420px; overflow:hidden; background:var(--paper); }
+  .stage { position:relative; width:660px; height:420px; overflow:hidden;
+    background: radial-gradient(700px 380px at 50% 0%, #FFFDF8, transparent 70%), linear-gradient(180deg, var(--paper), var(--paper2)); }
+  .title { position:absolute; top:42px; left:0; right:0; text-align:center;
+    font:500 34px/1 Newsreader, Georgia, serif; letter-spacing:-.015em; color:var(--ink); }
+  .title .dot { color:var(--rubric); }
+  .sub { position:absolute; top:88px; left:0; right:0; text-align:center;
+    font:400 15px/1.3 Newsreader, Georgia, serif; font-style:italic; color:var(--soft); }
+  .sub mark { background:var(--mark); color:#6E1E16; font-style:normal; padding:0 3px; border-radius:2px; }
+  /* soft plates under where Finder draws the icons */
+  .plate { position:absolute; width:148px; height:148px; border-radius:34px; top:140px;
+    background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.85), rgba(255,255,255,.3) 72%);
+    border:1px solid rgba(38,34,28,.06); box-shadow:0 16px 36px -24px rgba(38,34,28,.35); }
+  svg.arrow { position:absolute; inset:0; }
+  .hint { position:absolute; bottom:34px; left:0; right:0; text-align:center;
+    font:500 12.5px/1 -apple-system, "SF Pro Text", Helvetica, sans-serif; color:var(--faint); letter-spacing:.01em; }
+  .key { display:inline-block; min-width:22px; padding:3px 7px; margin:0 1px; border-radius:5px; border:1px solid var(--line);
+    background:#FFFDF8; color:var(--ink); font:600 11.5px/1 -apple-system, "SF Pro Text", sans-serif; box-shadow:0 1px 0 var(--line); }
+  .hint b { color:var(--soft); font-weight:600; }
+</style></head>
+<body><div class="stage">
+  <div class="title">Aside<span class="dot">.</span></div>
+  <div class="sub">Drag Aside into <mark>Applications</mark>.</div>
+
+  <div class="plate" style="left:96px"></div>
+  <div class="plate" style="left:416px"></div>
+
+  <svg class="arrow" width="660" height="420" viewBox="0 0 660 420">
+    <!-- a highlighter stroke, like the marks in Aside's answers, with a rubric arrowhead -->
+    <path d="M258 216 C 300 206, 352 224, 398 212" fill="none" stroke="#F2D6CA" stroke-width="16" stroke-linecap="round" opacity=".95"/>
+    <path d="M262 214 C 302 206, 350 222, 396 211" fill="none" stroke="#A8352A" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M386 202 L 399 211 L 387 221" fill="none" stroke="#A8352A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+
+  <div class="hint">Then point at any word and press <span class="key">⌥</span><span class="key">Space</span>. Aside lives in your <b>menu bar</b>.</div>
+</div></body></html>

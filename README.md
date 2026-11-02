@@ -28,14 +28,9 @@ The answer is laid out for skimming: the term and what kind of thing it is here,
 
 ## Install
 
-Requires macOS 15.2+ and Xcode's command line tools.
+**[Download Aside for Mac](https://github.com/joshuaramkissoon/aside/releases/latest/download/Aside.dmg)** (macOS 15.2 or later, Apple silicon and Intel). Open the DMG and drag Aside into Applications. It's signed and notarised, and it updates itself.
 
-```sh
-git clone <this repo> && cd aside
-scripts/build.sh --install      # builds, signs and opens ~/Applications/Aside.app
-```
-
-The first launch walks you through setup. Grant **Accessibility**, which Aside needs to read what you point at; the window moves on by itself once it sees the switch flipped. **Screen Recording** is optional and only used for apps that hide their text. Then paste a [Together](https://api.together.ai) API key, and optionally a Gemini key for looking up things the model hasn't heard of. The last step has some text to try ⌥ Space on. To reuse keys from an `.env` without pasting them:
+The first launch walks you through setup. Grant **Accessibility**, which Aside needs to read what you point at; the window moves on by itself once it sees the switch flipped. **Screen Recording** is optional and only used for apps that hide their text. Then paste a [Together](https://api.together.ai) API key. Unfamiliar names are looked up on Wikipedia with no extra key; a Gemini key in Settings adds Google Search for recent news. The last step has some text to try ⌥ Space on. To reuse keys from an `.env` without pasting them:
 
 ```sh
 TOGETHER_API_KEY=... ~/Applications/Aside.app/Contents/MacOS/Aside --import-key
@@ -47,14 +42,17 @@ Settings (in the menu bar) has three palettes (Rubric, Marker, Plum & Coral), ea
 
 ## Develop
 
+To build from source you need Xcode's command line tools:
+
 ```sh
+scripts/build.sh --install                   # local build, signed with your Apple Development cert, into ~/Applications
 swift build && .build/debug/Aside            # run from a terminal that has Accessibility access
 python3 bench/run.py [case ...]              # latency and answers for bench/cases.json, using the app's exact prompt
 .build/debug/Aside --shots out/              # panel screenshots in every palette; SHOTS=all adds edge cases, SETTINGS=1 and ONBOARD=1 the windows
 PROBE_APP=com.google.Chrome .build/debug/Aside --probe 0   # print what capture reads from an app
 .build/debug/Aside --trigger                 # run a look-up in the running app, as if the shortcut was pressed
 scripts/icon.sh                              # rebuild the app icon
-scripts/release.sh                           # universal build, Developer ID signing, DMG, notarisation (needs ASIDE_NOTARY_PROFILE)
+scripts/release.sh [--publish]               # notarised universal DMG + Sparkle appcast; --publish uploads a GitHub release and redeploys the site
 .build/debug/Aside --selftest                # check capture on Aside's own window, and CJK word segmentation
 .build/debug/Aside --markdown                # print how the parser reads tricky markdown
 ```

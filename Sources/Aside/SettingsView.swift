@@ -28,6 +28,8 @@ struct SettingsView: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .background(c.card)
+        // The window hands initial focus to the first button (the General tab), and the system ring looks broken here.
+        .focusEffectDisabled()
     }
 
     private func masthead(_ c: Swatch) -> some View {
@@ -54,6 +56,13 @@ struct SettingsView: View {
             Text(AboutView.version)
                 .font(.system(size: 11).monospacedDigit())
                 .foregroundStyle(c.faint)
+            if Updater.enabled {
+                Button("Check for updates") { Updater.shared.checkForUpdates() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(c.accent)
+                    .padding(.leading, 10)
+            }
             Spacer()
             Button("Quit Aside") { NSApp.terminate(nil) }
                 .buttonStyle(.plain)
@@ -184,8 +193,9 @@ private struct KeysPane: View {
             KeyField(name: .together, title: "Together API key", link: ("Get a key at api.together.ai", "https://api.together.ai/settings/api-keys"),
                      testable: true, c: c)
             Note(text: "Answers come from \(settings.model.split(separator: "/").last.map(String.init) ?? settings.model) on Together, with thinking off for speed. Only the text you look up and the words around it are sent.", c: c)
+            Note(text: "Unfamiliar names are looked up on Wikipedia, no key needed. Optionally, a Gemini key adds Google Search for recent news.", c: c)
             KeyField(name: .gemini, title: "Gemini API key, optional",
-                     link: ("For things the model hasn't heard of: Aside checks the web first. Get one at aistudio.google.com", "https://aistudio.google.com/apikey"),
+                     link: ("Get one at aistudio.google.com", "https://aistudio.google.com/apikey"),
                      testable: false, c: c)
             Note(text: "Keys are kept in ~/Library/Application Support/Aside, readable only by you.", c: c)
         }

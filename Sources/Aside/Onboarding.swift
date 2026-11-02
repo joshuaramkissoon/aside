@@ -118,6 +118,7 @@ struct OnboardingView: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .background(c.card)
+        .focusEffectDisabled()
         .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: model.step)
         .onAppear { if model.polls { model.startPolling() } }
     }
@@ -315,9 +316,7 @@ private struct KeysStep: View {
             KeyField(name: .together, title: "Together API key", link: ("Get a key at api.together.ai", "https://api.together.ai/settings/api-keys"),
                      testable: true, c: c) { model.hasKey = $0 }
                 .padding(.top, 6)
-            KeyField(name: .gemini, title: "Gemini API key, optional",
-                     link: ("For looking up things the model hasn't heard of: Aside checks the web first. Get one at aistudio.google.com", "https://aistudio.google.com/apikey"),
-                     testable: false, c: c) { model.hasGemini = $0 }
+            Lede(text: "When the model hasn't heard of something, Aside looks it up on Wikipedia first. No extra key needed.", c: c)
         }
     }
 }
