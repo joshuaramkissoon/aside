@@ -100,27 +100,44 @@ final class Engine: @unchecked Sendable {
 /// The API key lives in a file only your user can read (like an .env), not the Keychain:
 /// the login keychain ties items to one exact build, so every update would ask for your password.
 enum KeyStore {
-    static var url: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Aside", isDirectory: true)
-        return dir.appendingPathComponent("together-api-key")
-    }
-    private static var cached: String?
+    /// Together answers every look-up; Gemini (optional) is only used to search the web for terms the model doesn't know.
+    enum Name: String, CaseIterable {
+        case together = "together-api-key"
+        case gemini = "gemini-api-key"
 
-    static var apiKey: String? {
-        if let cached { return cached }
-        if let env = ProcessInfo.processInfo.environment["TOGETHER_API_KEY"]?.nonEmpty { cached = env; return env }
-        guard let s = try? String(contentsOf: url, encoding: .utf8).nonEmpty else { return nil }
-        cached = s
+        var envVar: String { self == .together ? "TOGETHER_API_KEY" : "GEMINI_API_KEY" }
+    }
+
+    static var directory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Aside", isDirectory: true)
+    }
+    static func url(_ n: Name) -> URL { directory.appendingPathComponent(n.rawValue) }
+    private static var cached: [Name: String] = [:]
+
+    static func get(_ n: Name) -> String? {
+        if let v = cached[n] { return v }
+        if let env = ProcessInfo.processInfo.environment[n.envVar]?.nonEmpty { cached[n] = env; return env }
+        guard let s = try? String(contentsOf: url(n), encoding: .utf8).nonEmpty else { return nil }
+        cached[n] = s
         return s
     }
 
-    static func save(_ key: String) {
+    static func save(_ key: String, as n: Name) {
         let fm = FileManager.default
-        try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
-                                attributes: [.posixPermissions: 0o700])
-        fm.createFile(atPath: url.path, contents: Data(key.trimmed.utf8), attributes: [.posixPermissions: 0o600])
-        try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-        cached = key.trimmed.nonEmpty
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let path = url(n).path
+        if let k = key.trimmed.nonEmpty {
+            fm.createFile(atPath: path, contents: Data(k.utf8), attributes: [.posixPermissions: 0o600])
+            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+            cached[n] = k
+        } else {
+            try? fm.removeItem(atPath: path)
+            cached[n] = nil
+        }
     }
+
+    // The Together key, which every look-up needs.
+    static var apiKey: String? { Self.get(.together) }
+    static func save(_ key: String) { save(key, as: .together) }
 }

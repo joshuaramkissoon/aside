@@ -118,6 +118,8 @@ enum DevTools {
             cases.append(("thread", { .lookup(Fixtures.thread()) }))
             cases.append(("loading", { .lookup(Fixtures.loading()) }))
             cases.append(("prose", { .lookup(Fixtures.prose()) }))
+            cases.append(("searching", { .lookup(Fixtures.searching()) }))
+            cases.append(("sourced", { .lookup(Fixtures.sourced()) }))
             cases.append(("error", { .lookup(LookupSession.failedFixture(Fixtures.flushCapture, EngineError.noKey.errorDescription!)) }))
             cases.append(("hint", { .hint(title: "Nothing to look up", body: "Select some text, or point at a word, then press ⌥ Space.", action: nil) }))
             let only = ProcessInfo.processInfo.environment["SHOTS"]?.split(separator: ",").map(String.init)
@@ -257,6 +259,32 @@ NEXT:
         c.term = "ahead"
         c.source = .pointer
         return LookupSession.fixture(c, [(nil, "")])
+    }
+
+    static let glasswingCapture = Capture(
+        term: "Glasswing",
+        context: "Reading list for the week: the SQLite notes on atomic commit, the new fuzzing write-up, and the Glasswing post everyone keeps sharing. Worth knowing the dates.",
+        termRange: nil, appName: "Slack", bundleID: "com.tinyspeck.slackmacgap", windowTitle: "#security", source: .selection)
+
+    static func searching() -> LookupSession {
+        LookupSession.searchingFixture(glasswingCapture, query: "Anthropic Glasswing")
+    }
+
+    /// An answer grounded in web results. (Fixture text: illustrative, not a factual claim.)
+    static func sourced() -> LookupSession {
+        LookupSession.fixture(glasswingCapture, [(nil, """
+TERM: Glasswing
+EXPANDS:
+KIND: project name
+GIST: An Anthropic programme giving selected companies ==early access to an unreleased model== to find security flaws.
+- Announced in **April 2026**, which is why it keeps turning up in security reading lists.
+NEXT:
+? When was Glasswing announced?
+? Which companies joined it?
+""")]).withSources([
+            .init(title: "Anthropic News", url: URL(string: "https://www.anthropic.com/news")!),
+            .init(title: "Coverage", url: URL(string: "https://www.theverge.com/")!),
+        ])
     }
 
     static func prose() -> LookupSession {

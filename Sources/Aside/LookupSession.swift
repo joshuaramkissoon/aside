@@ -5,13 +5,34 @@ import SwiftUI
 @MainActor
 final class LookupSession: ObservableObject, Identifiable {
     struct Turn: Identifiable, Equatable {
-        enum State: Equatable { case waiting, streaming, done, failed(String) }
+        /// `searching` carries the web query while Aside looks up a term the model didn't know.
+        enum State: Equatable { case waiting, searching(String), streaming, done, failed(String) }
         let id = UUID()
         var question: String?
         var raw = ""
         var answer = Answer()
         var state: State = .waiting
         var firstTokenMs: Double?
+        /// Web pages the answer was grounded in (empty when the model answered from its own knowledge).
+        var sources: [WebSource] = []
+
+        var isBusy: Bool {
+            switch state {
+            case .waiting, .searching, .streaming: return true
+            default: return false
+            }
+        }
+    }
+
+    struct WebSource: Equatable, Hashable, Identifiable {
+        let title: String
+        let url: URL
+        var id: URL { url }
+        /// "en.wikipedia.org" → "wikipedia.org", for a compact label.
+        var site: String {
+            let h = url.host() ?? url.absoluteString
+            return h.hasPrefix("www.") ? String(h.dropFirst(4)) : h
+        }
     }
 
     let id = UUID()
@@ -28,7 +49,7 @@ final class LookupSession: ObservableObject, Identifiable {
     }
 
     var title: String { turns.first?.answer.term ?? capture.term }
-    var isBusy: Bool { turns.last.map { $0.state == .waiting || $0.state == .streaming } ?? false }
+    var isBusy: Bool { turns.last?.isBusy ?? false }
     var suggestions: [String] {
         guard let last = turns.last, last.state == .done else { return [] }
         return last.answer.next
@@ -119,6 +140,20 @@ final class LookupSession: ObservableObject, Identifiable {
             return t
         }
         return s
+    }
+
+    static func searchingFixture(_ capture: Capture, query: String) -> LookupSession {
+        let s = LookupSession(capture: capture)
+        var t = Turn()
+        t.state = .searching(query)
+        s.turns = [t]
+        return s
+    }
+
+    /// Attach web sources to the first turn of a fixture.
+    func withSources(_ sources: [WebSource]) -> LookupSession {
+        if !turns.isEmpty { turns[0].sources = sources }
+        return self
     }
 
     static func failedFixture(_ capture: Capture, _ message: String) -> LookupSession {

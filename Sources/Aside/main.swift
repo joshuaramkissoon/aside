@@ -9,15 +9,17 @@ if args.contains("--trigger") {
     exit(0)
 }
 
-// `TOGETHER_API_KEY=… Aside --import-key` saves the key for Aside.
+// `TOGETHER_API_KEY=… GEMINI_API_KEY=… Aside --import-key` saves whichever keys are set, for Aside.
 if args.contains("--import-key") {
-    guard let key = ProcessInfo.processInfo.environment["TOGETHER_API_KEY"]?.nonEmpty else {
-        print("Set TOGETHER_API_KEY to import it.")
-        exit(1)
+    var saved: [String] = []
+    for n in KeyStore.Name.allCases {
+        if let key = ProcessInfo.processInfo.environment[n.envVar]?.nonEmpty {
+            KeyStore.save(key, as: n)
+            saved.append(n.envVar)
+        }
     }
-    KeyStore.save(key)
-    print("Saved.")
-    exit(0)
+    print(saved.isEmpty ? "Set TOGETHER_API_KEY and/or GEMINI_API_KEY to import them." : "Saved \(saved.joined(separator: ", ")).")
+    exit(saved.isEmpty ? 1 : 0)
 }
 
 MainActor.assumeIsolated {
