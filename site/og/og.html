@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>Aside OG image source</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  /* Source for ../og.png. Render at 1200x630, light mode, and screenshot. */
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body { background: var(--page); }
+  .og { position: relative; width: 1200px; height: 630px; padding: 72px 80px; display: grid; grid-template-columns: 470px 1fr; gap: 40px; }
+  .og .brand { font-size: 26px; gap: 12px; }
+  .og .brand img { width: 40px; height: 40px; }
+  .og h1 { font-size: 92px; margin-top: 120px; }
+  .og .sub { margin-top: 26px; font-size: 23px; color: var(--soft); line-height: 1.45; }
+  .og .doc { position: absolute; right: 72px; top: 100px; width: 600px; height: 430px; background: var(--doc); border: 1px solid var(--rule); border-radius: 14px; padding: 30px 32px; font: 17px/1.65 var(--sans); color: var(--soft); box-shadow: var(--win-shadow); }
+  .og .doc .word { position: relative; color: var(--ink); }
+  .og .doc p { position: relative; z-index: 0; }
+  .og .doc .word-mark { opacity: 1; }
+  .og .panel-wrap { position: absolute; margin: 0; opacity: 1; left: 106px; top: 72px; width: 448px; }
+  .og .p-ms { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="og">
+  <div>
+    <span class="brand"><img src="../img/favicon-64.png" alt=""><span>Aside</span></span>
+    <h1>What it means <em><span class="hl" style="--x:1">here</span></em>.</h1>
+    <p class="sub">Look anything up on your Mac, in context.</p>
+  </div>
+  <div class="doc">
+    <p>Four steps: write vs <span class="word">flush<span class="word-mark"></span></span> vs fsync vs fsyncing the directory.</p>
+    <div class="panel-wrap">
+      <div class="panel" style="clip-path:none">
+        <div class="p-body">
+          <div class="p-eyebrow"><span class="p-app"></span><span class="p-snip"><b>Notes</b>&ensp;<i>write vs <strong>flush</strong> vs fsync vs fsyncing the directory</i></span><span class="p-ms">0.34s</span></div>
+          <div class="p-title"><span class="p-term">flush</span><span class="p-kind">I/O operation</span></div>
+          <p class="p-gist">Hands buffered writes to the OS, but does <mark>not guarantee they reach disk</mark>. That’s fsync’s job.</p>
+          <span class="p-rule"></span>
+          <ul class="p-bullets">
+            <li><code>flush</code> moves bytes from your buffer to the kernel’s page cache; <code>fsync</code> forces them onto the disk.</li>
+            <li>Survives a process crash, <strong>not</strong> a power cut.</li>
+          </ul>
+        </div>
+        <div class="p-foot" style="transform:none">
+          <div class="p-sugs"><ol class="p-sug-set" style="opacity:1"><li><kbd>⌘1</kbd><span>Why fsync the directory too?</span></li><li><kbd>⌘2</kbd><span>How does a write-ahead log use this?</span></li></ol></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
