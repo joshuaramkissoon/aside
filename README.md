@@ -52,6 +52,7 @@ python3 bench/run.py [case ...]              # latency and answers for bench/cas
 PROBE_APP=com.google.Chrome .build/debug/Aside --probe 0   # print what capture reads from an app
 .build/debug/Aside --trigger                 # run a look-up in the running app, as if the shortcut was pressed
 scripts/icon.sh                              # rebuild the app icon
+scripts/stats.sh                             # downloads per release, stars and repo traffic
 scripts/release.sh [--publish]               # notarised universal DMG + Sparkle appcast; --publish uploads a GitHub release and redeploys the site
 .build/debug/Aside --selftest                # check capture on Aside's own window, and CJK word segmentation
 .build/debug/Aside --markdown                # print how the parser reads tricky markdown
