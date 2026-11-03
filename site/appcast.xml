@@ -6,6 +6,15 @@
     <description>Aside for Mac updates</description>
     <language>en</language>
     <item>
+      <title>Aside 0.3.1</title>
+      <pubDate>Tue, 03 Nov 2026 13:25:09 GMT</pubDate>
+      <sparkle:version>20</sparkle:version>
+      <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.2</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/joshuaramkissoon/aside/releases/tag/v0.3.1</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/joshuaramkissoon/aside/releases/download/v0.3.1/Aside-0.3.1.dmg" length="3728856" type="application/octet-stream" sparkle:edSignature="9y1545QtXV6Uu1QaRzSJNqS8z5yB1WK1Qni3mafJC2NLcPFODQdbIWgmCrvhOUwzMlonC/c2avrKVxJFOprMDQ==" />
+    </item>
+    <item>
       <title>Aside 0.3.0</title>
       <pubDate>Mon, 02 Nov 2026 16:37:48 GMT</pubDate>
       <sparkle:version>17</sparkle:version>
