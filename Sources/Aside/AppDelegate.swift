@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         Updater.shared.start()
+        installEditMenu()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let b = item.button {
             let img = NSImage(systemSymbolName: "text.magnifyingglass", accessibilityDescription: "Aside")
@@ -127,6 +128,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func checkForUpdates() { Updater.shared.checkForUpdates() }
+
+    /// A menu bar app has no menu bar of its own, and text fields get ⌘V, ⌘C, ⌘X, ⌘A and ⌘Z from the main menu's
+    /// key equivalents. Without this, pasting an API key in onboarding or settings silently does nothing.
+    /// It's never shown. The panel's own shortcuts (⌘C copies the answer) run first, in Panel's key monitor.
+    private func installEditMenu() {
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        editItem.submenu = edit
+        let main = NSMenu()
+        main.addItem(NSMenuItem(title: "Aside", action: nil, keyEquivalent: ""))  // the app menu slot
+        main.addItem(editItem)
+        NSApp.mainMenu = main
+    }
 
     @objc func showAbout() {
         if aboutWindow == nil {
